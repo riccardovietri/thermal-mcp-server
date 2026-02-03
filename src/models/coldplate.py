@@ -105,10 +105,11 @@ class ColdPlateModel:
         else:
             raise ValueError(f"Unknown coolant type: {coolant_type}")
         
-        # Typical thermal resistances (K/W) - from experience
-        self.R_junction_to_case = 0.1  # GPU internal
-        self.R_tim = 0.05  # Thermal interface material
-        self.R_coldplate_conduction = 0.02  # Cold plate base conduction
+        # Typical thermal resistances (K/W) - modern high-performance cooling
+        # Based on Tesla experience and modern GPU cooling systems
+        self.R_junction_to_case = 0.04  # GPU internal (modern die attach, <0.05 K/W)
+        self.R_tim = 0.01  # Thermal interface material (high-perf TIM like PTM7950)
+        self.R_coldplate_conduction = 0.005  # Cold plate base conduction (thick copper)
         
         # Cold plate geometry (typical values)
         self.channel_hydraulic_diameter_m = 0.003  # 3mm channels
