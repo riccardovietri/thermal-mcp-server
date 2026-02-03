@@ -1,5 +1,7 @@
 name: Thermal Model Validation
 
+# Run on every push to main/claude/** branches and all PRs to main
+# This ensures build checks pass before merging
 on:
   push:
     branches: [ main, 'claude/**' ]
