@@ -339,13 +339,23 @@ def format_analysis_result(result: Dict[str, float]) -> str:
     output.append(f"  Pump Power: {result['pump_power_w']:.1f} W")
     output.append(f"  Reynolds Number: {result['reynolds_number']:.0f}")
     output.append("")
-    
+
+    # Add detailed thermal resistance breakdown if available
+    if "R_total_k_w" in result:
+        output.append("THERMAL RESISTANCE BREAKDOWN:")
+        output.append(f"  Junction-to-Case: {result.get('R_junction_to_case_k_w', 0):.4f} K/W")
+        output.append(f"  TIM: {result.get('R_tim_k_w', 0):.4f} K/W")
+        output.append(f"  Cold Plate Conduction: {result.get('R_coldplate_cond_k_w', 0):.4f} K/W")
+        output.append(f"  Convection: {result.get('R_convection_k_w', 0):.4f} K/W")
+        output.append(f"  Total: {result['R_total_k_w']:.4f} K/W")
+        output.append("")
+
     if result.get("warnings"):
         output.append("WARNINGS:")
         for warning in result["warnings"]:
             output.append(f"  {warning}")
         output.append("")
-    
+
     output.append("=" * 60)
     return "\n".join(output)
 
