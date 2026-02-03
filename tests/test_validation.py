@@ -1,6 +1,6 @@
 """
 Validation Tests Against Known Thermal Engineering Examples
-Author: Riccardo (Staff Thermal Engineer, Tesla)
+Author: Riccardo Vietri
 Date: February 2026
 
 These tests validate the thermal model against:
@@ -108,7 +108,7 @@ class TestTeslaExperienceValidation:
             f"Junction temp {result['junction_temp_c']}°C outside Tesla experience range"
 
         # At 12 LPM, coolant rise is modest: Q = m × cp × ΔT
-        # 700W / (12 LPM × 0.997 kg/L × 4180 J/kg/K) = 0.8°C
+        # 700W / (12 LPM × 1.0 kg/L × 4180 J/kg/K) ≈ 0.8°C
         assert 0.5 < result["coolant_temp_rise_c"] < 10, \
             f"Coolant rise {result['coolant_temp_rise_c']}°C outside expected range"
 

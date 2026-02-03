@@ -1,6 +1,6 @@
 """
 Unit Tests for Thermal MCP Server - Cold Plate Model
-Author: Riccardo (Staff Thermal Engineer, Tesla)
+Author: Riccardo Vietri
 Date: February 2026
 
 Test coverage:

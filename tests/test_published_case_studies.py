@@ -1,6 +1,6 @@
 """
 Validation Tests Based on Published Case Studies and Research
-Author: Riccardo (Staff Thermal Engineer, Tesla)
+Author: Riccardo Vietri
 Date: February 2026
 
 This test suite validates the thermal model against published research papers
@@ -114,7 +114,7 @@ class TestArxivH100BenchmarkStudy:
 
         # Coolant temp rise should be calculable
         # Q = m_dot × cp × ΔT
-        # 5600W / (40 LPM × 0.997 kg/L × 4180 J/kg/K) = 2.0°C
+        # 5600W / (40 LPM × 1.0 kg/L × 4180 J/kg/K) ≈ 2.0°C
         assert 1.5 < result["coolant_temp_rise_c"] < 6, \
             f"Coolant rise {result['coolant_temp_rise_c']}°C outside expected range"
 
