@@ -105,11 +105,11 @@ class ColdPlateModel:
         else:
             raise ValueError(f"Unknown coolant type: {coolant_type}")
         
-        # Typical thermal resistances (K/W) - modern high-performance cooling
-        # Based on Tesla experience and modern GPU cooling systems
-        self.R_junction_to_case = 0.04  # GPU internal (modern die attach, <0.05 K/W)
-        self.R_tim = 0.01  # Thermal interface material (high-perf TIM like PTM7950)
-        self.R_coldplate_conduction = 0.005  # Cold plate base conduction (thick copper)
+        # Typical thermal resistances (K/W) - for high-power GPUs with liquid cooling
+        # These values reflect modern data center GPU designs (H100, H200 class)
+        self.R_junction_to_case = 0.03  # GPU internal (improved die-to-IHS path)
+        self.R_tim = 0.015  # High-performance thermal interface material
+        self.R_coldplate_conduction = 0.005  # Cold plate base conduction (Cu/Al)
         
         # Cold plate geometry (typical values)
         self.channel_hydraulic_diameter_m = 0.003  # 3mm channels
@@ -140,14 +140,22 @@ class ColdPlateModel:
         )
         
         # Calculate convection thermal resistance
-        contact_area_m2 = 0.01  # 100 cm² typical GPU cold plate
-        R_convection = 1.0 / (h_convection * contact_area_m2)
-        
+        # Scale contact area by number of GPUs (each GPU ~100 cm²)
+        contact_area_per_gpu_m2 = 0.01  # 100 cm² typical GPU cold plate
+        total_contact_area_m2 = contact_area_per_gpu_m2 * self.num_gpus
+        R_convection = 1.0 / (h_convection * total_contact_area_m2)
+
         # Total thermal resistance from junction to coolant
+        # For multi-GPU systems, junction-to-case and TIM are per-GPU (parallel paths)
+        # while coldplate conduction and convection are already scaled above
+        R_junction_effective = self.R_junction_to_case / self.num_gpus
+        R_tim_effective = self.R_tim / self.num_gpus
+        R_coldplate_effective = self.R_coldplate_conduction / self.num_gpus
+
         R_total = (
-            self.R_junction_to_case +
-            self.R_tim +
-            self.R_coldplate_conduction +
+            R_junction_effective +
+            R_tim_effective +
+            R_coldplate_effective +
             R_convection
         )
         
