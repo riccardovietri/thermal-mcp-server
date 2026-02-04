@@ -346,5 +346,12 @@ def optimize_flow_rate(
 
 
 if __name__ == "__main__":
+    import sys
+    print("=" * 60, file=sys.stderr)
+    print("Thermal MCP Server Starting...", file=sys.stderr)
+    print("Server ready and waiting for connections.", file=sys.stderr)
+    print("Press Ctrl+C to stop.", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+
     # Run the MCP server
     mcp.run()
