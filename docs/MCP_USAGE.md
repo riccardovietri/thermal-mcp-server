@@ -114,80 +114,135 @@ optimize_flow_rate(
 
 ---
 
-## Setup for Claude Desktop
+## Setup for Claude Code
 
 ### Step 1: Install the Server
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/thermal-mcp-server.git
+git clone https://github.com/riccardovietri/thermal-mcp-server.git
 cd thermal-mcp-server
 
+# Create virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-### Step 2: Configure Claude Desktop
-
-Edit your Claude Desktop configuration file:
-
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-**Linux**: `~/.config/Claude/claude_desktop_config.json`
-
-Add the thermal server:
-
-```json
-{
-  "mcpServers": {
-    "thermal-cooling": {
-      "command": "python",
-      "args": [
-        "-m",
-        "src.mcp_server"
-      ],
-      "cwd": "/absolute/path/to/thermal-mcp-server"
-    }
-  }
-}
-```
-
-**Important**: Replace `/absolute/path/to/thermal-mcp-server` with the actual path!
-
-### Step 3: Restart Claude Desktop
-
-Close and reopen Claude Desktop. The thermal tools should now be available.
-
-### Step 4: Verify Installation
-
-In Claude Desktop, try asking:
-
-> "What temperature will a 700W H100 GPU reach with 12 LPM water cooling?"
-
-Claude should use the `analyze_coldplate_system` tool to provide an answer.
-
----
-
-## Setup for Claude Code (CLI)
-
-### Step 1: Install and Run
+### Step 2: Run the MCP Server
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the MCP server
+# Start the MCP server (uses stdio for communication)
 python -m src.mcp_server
 ```
 
-### Step 2: Test with MCP Inspector
+The server starts in stdio mode and communicates with Claude Code via standard input/output. You should see no output if it starts successfully (stdio mode is silent).
+
+### Step 3: Verify Tools Are Available
+
+Open Claude Code and ask:
+
+> "What thermal analysis tools do you have access to?"
+
+Claude should list the three tools:
+- `analyze_coldplate_system`
+- `compare_cooling_options`
+- `optimize_flow_rate`
+
+If the tools don't appear, check the troubleshooting section below.
+
+### Step 4: Try an Example
+
+Ask Claude:
+
+> "I have 8 H100 GPUs at 700W each. What flow rate do I need to keep them under 85°C with water cooling?"
+
+Claude should use the `optimize_flow_rate` tool to calculate the answer.
+
+---
+
+## Troubleshooting
+
+### Issue: Tools not available in Claude Code
+
+**Solution**:
+1. Verify the MCP server is running without errors
+2. Check Python version: `python --version` (requires >=3.10)
+3. Verify installation: `python -c "from src.models.coldplate import ColdPlateModel; print('✓ OK')"`
+4. Restart the MCP server
+
+### Issue: "Module not found" error
+
+**Solution**:
+```bash
+# Ensure you're in the correct directory
+cd thermal-mcp-server
+
+# Reinstall dependencies
+pip install -r requirements.txt
+
+# Verify imports work
+python -c "from src.mcp_server import analyze_coldplate_system; print('✓ OK')"
+```
+
+### Issue: Wrong results or unexpected behavior
+
+**Solution**:
+1. Verify input parameters are reasonable:
+   - GPU power: 300-1000W typical
+   - Flow rate: 5-30 LPM typical
+   - Coolant type: exactly "water", "glycol", or "dielectric"
+2. Check that temperatures are positive
+3. Run validation: `python examples/validation_nvidia_h100.py`
+
+---
+
+## Testing the Server (Advanced)
+
+### Manual Testing with Python
 
 ```bash
-# Install MCP inspector
+# Start Python interpreter
+python
+
+# Import and test
+from src.mcp_server import analyze_coldplate_system
+
+result = analyze_coldplate_system(
+    gpu_power_w=700,
+    coolant_type="water",
+    flow_rate_lpm=12
+)
+print(result)
+```
+
+### Testing with MCP Inspector
+
+The MCP Inspector is a debugging tool for MCP servers:
+
+```bash
+# Install MCP inspector (requires Node.js)
 npm install -g @modelcontextprotocol/inspector
 
 # Run inspector
-mcp-inspector python -m src.mcp_server
+npx @modelcontextprotocol/inspector python -m src.mcp_server
+```
+
+This opens a web interface where you can manually call tools and inspect responses.
+
+### Automated Tests
+
+```bash
+# Run all tests
+pytest tests/
+
+# Test specific module
+pytest tests/test_coldplate.py -v
+
+# Run with coverage
+pytest tests/ --cov=src --cov-report=html
 ```
 
 ---
@@ -322,69 +377,6 @@ Temperature is well within safe operating limits (<85°C). No warnings.
 | "Is my design safe?" | `analyze_coldplate_system` | Includes warnings and checks |
 | "Compare coolants" | `compare_cooling_options` | Direct comparison table |
 
----
-
-## Common Issues and Solutions
-
-### Issue: Tools not appearing in Claude Desktop
-
-**Solution**:
-1. Check config file path is correct for your OS
-2. Verify absolute path to thermal-mcp-server is correct
-3. Restart Claude Desktop completely
-4. Check Claude Desktop logs for errors
-
-### Issue: "Module not found" error
-
-**Solution**:
-```bash
-# Make sure you're in the thermal-mcp-server directory
-cd /path/to/thermal-mcp-server
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Verify installation
-python -c "from src.models.coldplate import ColdPlateModel; print('OK')"
-```
-
-### Issue: Wrong results or unexpected behavior
-
-**Solution**:
-1. Verify input parameters are reasonable (700W for H100, 8-20 LPM flow, etc.)
-2. Check coolant type spelling (must be exactly "water", "glycol", or "dielectric")
-3. Ensure temperature and flow values are positive
-
----
-
-## Testing the Server
-
-### Manual Testing
-
-```bash
-# Start Python interpreter
-python
-
-# Import and test
-from src.mcp_server import analyze_coldplate_system
-
-result = analyze_coldplate_system(
-    gpu_power_w=700,
-    coolant_type="water",
-    flow_rate_lpm=12
-)
-print(result)
-```
-
-### Automated Tests
-
-```bash
-# Run all tests
-pytest tests/
-
-# Test specific module
-pytest tests/test_coldplate.py -v
-```
 
 ---
 
@@ -407,8 +399,8 @@ pytest tests/test_coldplate.py -v
 
 ## Support and Documentation
 
-- **Source Code**: https://github.com/yourusername/thermal-mcp-server
-- **Issues**: https://github.com/yourusername/thermal-mcp-server/issues
+- **Source Code**: https://github.com/riccardovietri/thermal-mcp-server
+- **Issues**: https://github.com/riccardovietri/thermal-mcp-server/issues
 - **Validation**: See `docs/VALIDATION.md` for published case study validation
 - **Test Strategy**: See `docs/TEST_STRATEGY.md` for testing approach
 

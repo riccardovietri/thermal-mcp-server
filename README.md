@@ -38,7 +38,7 @@ Claude can use three tools:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/thermal-mcp-server.git
+git clone https://github.com/riccardovietri/thermal-mcp-server.git
 cd thermal-mcp-server
 
 # Create virtual environment
@@ -58,30 +58,24 @@ python coldplate_model.py
 
 You should see output showing thermal analysis results for sample GPU configurations.
 
-### Use with Claude
+### Use with Claude Code
 
-#### Option 1: Claude Desktop
-1. Add to your Claude Desktop config:
-   ```json
-   {
-     "mcpServers": {
-       "thermal": {
-         "command": "python",
-         "args": ["/path/to/thermal-mcp-server/src/mcp_server.py"]
-       }
-     }
-   }
-   ```
-2. Restart Claude Desktop
-3. Ask Claude about thermal systems!
-
-#### Option 2: Claude Code
 ```bash
-# Start the MCP server
-python src/mcp_server.py
-
-# In Claude Code, interact with Claude and it will use the thermal tools
+# Start the MCP server (uses stdio for communication)
+python -m src.mcp_server
 ```
+
+The MCP server communicates with Claude Code via stdio. Once running, Claude will have access to three thermal analysis tools:
+- `analyze_coldplate_system` - Calculate temperatures for given operating conditions
+- `compare_cooling_options` - Compare different coolants side-by-side
+- `optimize_flow_rate` - Find minimum flow rate for thermal targets
+
+**Verify tools are available:**
+Open Claude Code and ask: *"What thermal tools do you have access to?"*
+
+Claude should respond with descriptions of the three tools above. If not, check that the MCP server is running without errors.
+
+For detailed setup instructions, see [docs/MCP_USAGE.md](docs/MCP_USAGE.md).
 
 ## Examples
 
