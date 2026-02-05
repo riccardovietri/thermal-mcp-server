@@ -1,12 +1,16 @@
-# Thermal MCP Server (portfolio v0)
+# Thermal MCP Server
 
-One-sentence summary: **This MCP server runs a transparent first-principles cold-plate model to estimate junction temperature and hydraulic cost for a given heat load.**
+**A Model Context Protocol server that provides thermal analysis for liquid-cooled electronics.**
 
-## Why this is credible
-- Explicit thermal path: junction → case → TIM → copper base conduction → convection to coolant → bulk coolant rise → ambient reference. See [docs/physics.md](docs/physics.md).
-- Regime-aware convection: laminar / transitional / turbulent handling from Reynolds number.
-- Pressure drop from Darcy–Weisbach with regime-dependent friction factor.
-- All defaults and assumptions are explicit and overrideable.
+Estimates junction temperature, thermal resistances, and hydraulic requirements for cold plate cooling systems using first-principles heat transfer calculations.
+
+## Technical approach
+- Thermal path: junction → case → TIM → copper base → convection → coolant → ambient
+- Regime-aware convection (laminar/transitional/turbulent based on Reynolds number)
+- Pressure drop from Darcy-Weisbach correlation
+- All parameters are explicit with documented defaults
+
+See [docs/physics.md](docs/physics.md) for equations and assumptions.
 
 ## Quick run (copy/paste)
 See [QUICKSTART.md](QUICKSTART.md) for the shortest path.
@@ -20,23 +24,22 @@ pip install -e .
 python -m thermal_mcp_server.mcp_server
 ```
 
-## MCP tools (exactly three)
-1. `analyze_coldplate`
-2. `compare_coolants`
-3. `optimize_flow_rate`
+## Available tools
+1. **analyze_coldplate** — Calculate junction temperature and pressure drop for given conditions
+2. **compare_coolants** — Compare water vs glycol performance side-by-side
+3. **optimize_flow_rate** — Find minimum flow rate to meet temperature target
 
-Tool details and schemas: [docs/mcp.md](docs/mcp.md)
+See [docs/mcp.md](docs/mcp.md) for tool schemas and usage.
 
-## Proof it works
-- Test suite for monotonic thermal behavior, regime switching, coolant ordering, pressure-drop scaling, and input validation.
-- Validation example in [`examples/validation_walkthrough.md`](examples/validation_walkthrough.md).
+## Testing
+Test suite covers thermal behavior, regime transitions, and input validation.
 
 Run tests:
 ```bash
 pytest
 ```
 
-## Intentionally out of scope (v0 honesty)
+## Current limitations
 - 2D/3D spreading resistance and non-uniform heat flux
 - Channel maldistribution/manifold losses
 - Boiling/two-phase flow and cavitation

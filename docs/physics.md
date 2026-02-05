@@ -1,7 +1,7 @@
 # Physics Model and Assumptions
 
 ## A) Overview
-The model is a steady-state, 1D resistance network intended for fast trade studies.
+The model is a steady-state, 1D thermal resistance network for rapid design analysis.
 
 Thermal path:
 `Junction -> Case -> TIM -> Base conduction -> Convection to coolant -> Coolant bulk rise -> Ambient reference`
@@ -65,13 +65,13 @@ Coolant table (nominal, room-temperature):
 - Constant properties (no temperature-dependent fluid properties).
 
 ## F) Engineering Notes
-As a staff-level engineering judgement call, this v0 uses Dittus–Boelter for turbulent forced convection and a constant fully developed laminar Nusselt number for low-Re flow, because these are simple, auditable, and broadly accepted first-pass correlations for internal flow. Transitional flow is blended to avoid discontinuities in optimization and to keep UX stable.
+This model uses Dittus-Boelter for turbulent forced convection and a constant fully developed laminar Nusselt number for low-Re flow. These correlations are well-established for internal flow in heat transfer literature and appropriate for first-pass design analysis. Transitional flow is blended linearly to avoid discontinuities in optimization.
 
 Failure modes not captured: flow maldistribution across channels, 2D/3D spreading resistance in package and base, contact-resistance scatter, TIM pump-out/aging, manifold/header losses, air ingestion, boiling inception, and transient warm-up behavior.
 
 For validation on hardware, collect: flow rate, inlet/outlet coolant temperatures, multiple base temperatures, pressure drop across cold plate, and electrical heat input. Then compare inferred thermal resistance and pressure-drop curves versus model predictions.
 
-v0.2 fidelity upgrades:
+Potential future enhancements:
 1. Temperature-dependent coolant properties and viscosity correction.
 2. Explicit manifold + entrance/exit minor-loss coefficients.
 3. Package/base spreading-resistance submodel.

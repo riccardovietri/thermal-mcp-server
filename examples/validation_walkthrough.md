@@ -1,4 +1,4 @@
-# Validation Walkthrough (toy but honest)
+# Validation Walkthrough
 
 Scenario: 700 W chip, water, 25 C inlet, default geometry.
 
