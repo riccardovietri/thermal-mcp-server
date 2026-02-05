@@ -7,7 +7,7 @@ Thank you for your interest in contributing! This guide will help you get set up
 ### Prerequisites
 - Python 3.10 or higher
 - Git
-- (Optional) Claude Desktop or Claude Code
+- Claude Code (for testing MCP integration)
 
 ### Installation
 
@@ -51,59 +51,46 @@ thermal-mcp-server/
 │   ├── test_mcp_tools.py       # MCP tool logic tests
 │   ├── test_validation.py      # First principles validation
 │   └── test_published_case_studies.py  # Literature validation
-├── docs/                       # Documentation (future)
-├── examples/                   # Usage examples (future)
+├── docs/                       # Documentation
+│   ├── MCP_USAGE.md           # Detailed MCP setup and usage
+│   ├── VALIDATION.md          # Model validation documentation
+│   └── TEST_STRATEGY.md       # Testing approach
+├── examples/                   # Usage examples
+│   └── validation_nvidia_h100.py  # H100 validation example
 ├── README.md                   # Project overview
 ├── CONTRIBUTING.md             # This file
-├── QUICKSTART.md               # Implementation guide
-├── thermal-mcp-project-plan.md # Development roadmap
+├── QUICKSTART.md               # User quick start guide
+├── DEVELOPER_GUIDE.md          # Implementation guide
+├── pyproject.toml              # Package metadata for PyPI
 └── requirements.txt            # Python dependencies
 ```
 
 ## Running the MCP Server
 
-### Option 1: Test Mode (Standalone)
+### Standalone Testing
 
 ```bash
 # Activate virtual environment
 source venv/bin/activate
 
-# Run the server (will start and wait for connections)
+# Run the server (will start in stdio mode)
 python -m src.mcp_server
 ```
 
-Press Ctrl+C to stop.
+The server runs in stdio mode and waits for MCP protocol messages. Press Ctrl+C to stop.
 
-### Option 2: Claude Desktop Integration
+### Claude Code Integration
 
-1. Find your Claude Desktop config file:
-   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-2. Add the thermal server configuration:
-
-```json
-{
-  "mcpServers": {
-    "thermal": {
-      "command": "python",
-      "args": ["-m", "src.mcp_server"],
-      "cwd": "/absolute/path/to/thermal-mcp-server",
-      "env": {
-        "PYTHONPATH": "/absolute/path/to/thermal-mcp-server"
-      }
-    }
-  }
-}
+```bash
+# Start the MCP server
+python -m src.mcp_server
 ```
 
-3. Restart Claude Desktop
+Once running, open Claude Code and the thermal tools will be available. Test by asking:
 
-4. Test by asking Claude: "Analyze a cold plate cooling 4 GPUs at 600W each with water at 12 LPM"
+> "I have 8 H100 GPUs at 700W each. What flow rate do I need for 85°C max junction temp?"
 
-### Option 3: Claude Code Integration
-
-Claude Code should auto-detect the MCP server when you open this project directory.
+Claude should use the `optimize_flow_rate` tool to answer.
 
 ## Development Workflow
 
@@ -173,7 +160,7 @@ If you modify `src/mcp_server.py`:
 
 1. **Run MCP tool tests**: `python -m pytest tests/test_mcp_tools.py -v`
 2. **Test server startup**: `python -m src.mcp_server` (should start without errors)
-3. **Test with Claude**: Ask Claude to use the tools in Claude Desktop
+3. **Test with Claude Code**: Ask Claude to use the tools to verify they work correctly
 
 ## Adding New Features
 
@@ -245,12 +232,12 @@ cd /path/to/thermal-mcp-server
 python -m pytest tests/
 ```
 
-### MCP server won't connect to Claude
+### MCP server tools not available in Claude Code
 
-1. Check that the `cwd` path in your Claude Desktop config is absolute
-2. Verify the server starts without errors: `python -m src.mcp_server`
-3. Check Claude Desktop logs for connection errors
-4. Restart Claude Desktop after config changes
+1. Verify the server starts without errors: `python -m src.mcp_server`
+2. Check Python version: `python --version` (requires >=3.10)
+3. Verify dependencies are installed: `pip list | grep fastmcp`
+4. Restart the MCP server
 
 ### Thermal model gives unexpected results
 
