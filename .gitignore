@@ -132,3 +132,8 @@ Thumbs.db
 # Project-specific
 .env.local
 config/claude_desktop_config.json
+
+# npm artifacts (not a node project)
+node_modules/
+package.json
+package-lock.json
