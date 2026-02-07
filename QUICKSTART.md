@@ -11,7 +11,7 @@ pip install -e .
 
 ## 2) Run MCP server
 ```bash
-python -m thermal_mcp_server.mcp_server
+python -m thermal_mcp_server
 ```
 
 ## 3) Smoke test model in Python

@@ -1,3 +1,0 @@
-fastmcp>=0.2.0
-pydantic>=2.6.0
-pytest>=8.0.0
