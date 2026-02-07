@@ -21,8 +21,26 @@ cd thermal-mcp-server
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-python -m thermal_mcp_server.mcp_server
+python -m thermal_mcp_server
 ```
+
+## Claude Desktop integration
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "thermal": {
+      "command": "python",
+      "args": ["-m", "thermal_mcp_server"],
+      "cwd": "/absolute/path/to/thermal-mcp-server"
+    }
+  }
+}
+```
+
+Then ask Claude: *"I have 8 H100 GPUs at 700W each with water cooling at 10 LPM. What's the junction temperature?"*
 
 ## Available tools
 1. **analyze_coldplate** — Calculate junction temperature and pressure drop for given conditions

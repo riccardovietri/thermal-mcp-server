@@ -112,18 +112,74 @@ def optimize_flow_rate_impl(
 
 
 @mcp.tool(name="analyze_coldplate")
-def analyze_coldplate(heat_load_w: float, flow_rate_lpm: float, inlet_temp_c: float = 25.0, ambient_temp_c: float = 25.0, coolant: str = "water", r_jc_k_per_w: float = 0.04, r_tim_k_per_w: float = 0.02, geometry: dict[str, Any] | None = None):
-    return analyze_coldplate_impl(heat_load_w, flow_rate_lpm, inlet_temp_c, ambient_temp_c, coolant, r_jc_k_per_w, r_tim_k_per_w, geometry)
+def analyze_coldplate(
+    heat_load_w: float,
+    flow_rate_lpm: float,
+    inlet_temp_c: float = 25.0,
+    ambient_temp_c: float = 25.0,
+    coolant: str = "water",
+    r_jc_k_per_w: float = 0.04,
+    r_tim_k_per_w: float = 0.02,
+    geometry: dict[str, Any] | None = None,
+):
+    """Calculate junction temperature, thermal resistances, and pressure drop for a liquid-cooled cold plate.
+
+    Uses a 1D thermal resistance network (junction -> case -> TIM -> base -> convection)
+    with Dittus-Boelter convection and Darcy-Weisbach pressure drop.
+    Supports water and 50/50 glycol coolants. Returns warnings if junction temperature
+    exceeds 95C or Reynolds number is dangerously low.
+    """
+    return analyze_coldplate_impl(
+        heat_load_w, flow_rate_lpm, inlet_temp_c, ambient_temp_c,
+        coolant, r_jc_k_per_w, r_tim_k_per_w, geometry,
+    )
 
 
 @mcp.tool(name="compare_coolants")
-def compare_coolants(heat_load_w: float, flow_rate_lpm: float, inlet_temp_c: float = 25.0, ambient_temp_c: float = 25.0, r_jc_k_per_w: float = 0.04, r_tim_k_per_w: float = 0.02, geometry: dict[str, Any] | None = None):
-    return compare_coolants_impl(heat_load_w, flow_rate_lpm, inlet_temp_c, ambient_temp_c, r_jc_k_per_w, r_tim_k_per_w, geometry)
+def compare_coolants(
+    heat_load_w: float,
+    flow_rate_lpm: float,
+    inlet_temp_c: float = 25.0,
+    ambient_temp_c: float = 25.0,
+    r_jc_k_per_w: float = 0.04,
+    r_tim_k_per_w: float = 0.02,
+    geometry: dict[str, Any] | None = None,
+):
+    """Compare thermal and hydraulic performance of water vs 50/50 glycol under identical conditions.
+
+    Runs analyze_coldplate for each coolant and returns side-by-side results
+    including junction temperature, pressure drop, and pump power for each.
+    """
+    return compare_coolants_impl(
+        heat_load_w, flow_rate_lpm, inlet_temp_c, ambient_temp_c,
+        r_jc_k_per_w, r_tim_k_per_w, geometry,
+    )
 
 
 @mcp.tool(name="optimize_flow_rate")
-def optimize_flow_rate(heat_load_w: float, max_junction_temp_c: float, coolant: str = "water", inlet_temp_c: float = 25.0, ambient_temp_c: float = 25.0, flow_min_lpm: float = 1.0, flow_max_lpm: float = 40.0, r_jc_k_per_w: float = 0.04, r_tim_k_per_w: float = 0.02, geometry: dict[str, Any] | None = None):
-    return optimize_flow_rate_impl(heat_load_w, max_junction_temp_c, coolant, inlet_temp_c, ambient_temp_c, flow_min_lpm, flow_max_lpm, r_jc_k_per_w, r_tim_k_per_w, geometry)
+def optimize_flow_rate(
+    heat_load_w: float,
+    max_junction_temp_c: float,
+    coolant: str = "water",
+    inlet_temp_c: float = 25.0,
+    ambient_temp_c: float = 25.0,
+    flow_min_lpm: float = 1.0,
+    flow_max_lpm: float = 40.0,
+    r_jc_k_per_w: float = 0.04,
+    r_tim_k_per_w: float = 0.02,
+    geometry: dict[str, Any] | None = None,
+):
+    """Find the minimum coolant flow rate that keeps junction temperature at or below a target.
+
+    Uses binary search between flow_min_lpm and flow_max_lpm.
+    Returns the minimum flow rate, whether the target was met,
+    and the full thermal analysis at that operating point.
+    """
+    return optimize_flow_rate_impl(
+        heat_load_w, max_junction_temp_c, coolant, inlet_temp_c,
+        ambient_temp_c, flow_min_lpm, flow_max_lpm,
+        r_jc_k_per_w, r_tim_k_per_w, geometry,
+    )
 
 
 if __name__ == "__main__":
