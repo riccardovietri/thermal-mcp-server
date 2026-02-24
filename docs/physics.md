@@ -36,7 +36,8 @@ Thermal path:
   - `<2300`: laminar
   - `2300-4000`: transitional (explicit blend for numerical smoothness)
   - `>4000`: turbulent
-- Pressure drop and convection both switch with regime.
+- Both Nusselt number and friction factor are linearly blended in the transition regime (Re 2300–4000) to avoid discontinuities. The friction factor blends between the laminar value at Re=2300 (`64/2300 ≈ 0.0278`) and the Blasius turbulent value at Re=4000 (`0.3164 × 4000^−0.25 ≈ 0.0398`), matching the Nusselt number treatment.
+- Pump power is computed as `ΔP × Q / η` with η = 0.50 (50% pump efficiency). This is representative for a centrifugal pump at partial load; users should adjust for their specific pump curve when sizing actual hardware.
 
 ## D) Parameters and defaults
 - Heat load: `700 W`

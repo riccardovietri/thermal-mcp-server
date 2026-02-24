@@ -127,7 +127,7 @@ def analyze_coldplate(
     Uses a 1D thermal resistance network (junction -> case -> TIM -> base -> convection)
     with Dittus-Boelter convection and Darcy-Weisbach pressure drop.
     Supports water and 50/50 glycol coolants. Returns warnings if junction temperature
-    exceeds 95C or Reynolds number is dangerously low.
+    exceeds 85C or Reynolds number is dangerously low.
     """
     return analyze_coldplate_impl(
         heat_load_w, flow_rate_lpm, inlet_temp_c, ambient_temp_c,

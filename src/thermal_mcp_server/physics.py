@@ -26,6 +26,7 @@ def _flow_quantities(inp: AnalyzeColdplateInput) -> tuple[float, float, float, f
     geom = inp.geometry
     props = COOLANTS[inp.coolant]
     flow_m3s = inp.flow_rate_lpm / 1000.0 / 60.0
+    # ASSUMPTION: square channel cross-section (side = channel_width). For rectangular channels, replace with width × height.
     area_total = geom.channel_count * geom.channel_width_m * geom.hydraulic_diameter_m
     velocity = flow_m3s / area_total
     re = props.density_kg_m3 * velocity * geom.hydraulic_diameter_m / props.mu_pa_s
@@ -47,7 +48,13 @@ def _nusselt(re: float, pr: float) -> tuple[float, str]:
 def _friction_factor(re: float) -> float:
     if re < 2300:
         return 64.0 / max(re, 1e-6)
-    return 0.3164 * re ** (-0.25)
+    if re > 4000:
+        return 0.3164 * re ** (-0.25)
+    # Transition regime: linear blend matching Nusselt treatment (Re 2300–4000)
+    f_lam = 64.0 / 2300.0
+    f_turb = 0.3164 * 4000 ** (-0.25)
+    blend = (re - 2300) / (4000 - 2300)
+    return f_lam * (1 - blend) + f_turb * blend
 
 
 def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
@@ -70,11 +77,13 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
 
     f = _friction_factor(re)
     dp = f * (geom.channel_length_m / geom.hydraulic_diameter_m) * (props.density_kg_m3 * velocity**2 / 2)
+    # ASSUMPTION: 50% pump efficiency (typical centrifugal pump at partial load). Adjust for specific pump curve.
     pump_power = dp * flow_m3s / 0.5
 
     warnings: list[str] = []
-    if t_j > 95:
-        warnings.append("junction temperature exceeds 95C")
+    # H100 SXM throttle onset is 83°C per NVIDIA thermal guidelines; 85°C used as conservative design ceiling
+    if t_j > 85:
+        warnings.append("junction temperature exceeds 85C")
     if re < 500:
         warnings.append("very low Reynolds number; risk of poor flow distribution")
 
