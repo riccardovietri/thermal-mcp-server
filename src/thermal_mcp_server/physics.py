@@ -72,10 +72,9 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     nu, regime = _nusselt(re, pr)
     h = nu * props.k_w_mk / geom.hydraulic_diameter_m
 
-    # ASSUMPTION: circular channel perimeter (π×Dh) used for wetted area. For square channels
-    # (consistent with the cross-section assumption above), use 4×channel_width×channel_length.
-    # This underestimates wetted area by ~22% vs square, conservatively overpredicting Tj.
-    wetted_area = geom.channel_count * pi * geom.hydraulic_diameter_m * geom.channel_length_m
+    # Square channel: wetted perimeter = 4 × side = 4 × Dh (since Dh = side for a square channel).
+    # Consistent with cross-section assumption above (area = channel_width × Dh = side²).
+    wetted_area = geom.channel_count * 4 * geom.channel_width_m * geom.channel_length_m
     r_conv = 1.0 / (h * wetted_area)
     r_base = geom.base_thickness_m / (geom.copper_k_w_mk * geom.contact_area_m2)
     r_total = inp.r_jc_k_per_w + inp.r_tim_k_per_w + r_base + r_conv
