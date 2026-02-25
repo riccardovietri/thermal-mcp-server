@@ -87,6 +87,18 @@ Configure in your MCP client (e.g., Claude Desktop `claude_desktop_config.json`)
 
 See the [MCP documentation](https://modelcontextprotocol.io/) for client setup details.
 
+## Usage with Claude
+
+Once configured, ask Claude natural-language questions about liquid cooling:
+
+> *"I'm running 8 H100 SXM GPUs at 700 W each with water cooling at 8 LPM per cold plate and 25°C inlet. What's the junction temperature and am I within thermal margin?"*
+
+Claude calls `analyze_coldplate` and interprets the result:
+
+> *"At 8 LPM with 25°C inlet water, each H100 runs at 71.7°C junction — 11.3°C below the 83°C throttle onset. Convective resistance (R_conv ≈ 0.004 K/W) is the dominant term after package resistances. You have room to reduce flow to ~5.5 LPM before hitting margin, which would cut pump power roughly in half."*
+
+This works in Claude Desktop, Claude.ai Projects, or any MCP-compatible client.
+
 ## Tools
 
 - **`analyze_coldplate`** — Single-point thermal and hydraulic analysis. Takes heat load, flow rate, inlet temperature, coolant type, and geometry. Returns junction temperature, thermal resistances, pressure drop, and pump power.

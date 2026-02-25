@@ -1,11 +1,16 @@
-"""Physics model for a toy-but-honest cold-plate thermal analysis."""
+"""Steady-state thermal resistance model for liquid-cooled cold plate analysis.
+
+Implements a 1D resistance network (R_jc → R_tim → R_base → R_conv) with
+Dittus-Boelter convection and Darcy-Weisbach pressure drop. All assumptions
+are documented inline. See docs/physics.md for full derivation and scope.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from math import pi
 
-from .schemas import AnalyzeColdplateInput, AnalyzeColdplateOutput
+from .schemas import AnalyzeColdplateInput, AnalyzeColdplateOutput, OptimizeFlowRateInput
 
 
 @dataclass(frozen=True)
@@ -18,6 +23,8 @@ class CoolantProperties:
 
 COOLANTS: dict[str, CoolantProperties] = {
     "water": CoolantProperties(997.0, 4180.0, 0.60, 0.00089),
+    # Ethylene glycol 50% by volume, nominal 25°C properties.
+    # For propylene glycol (lower toxicity), viscosity is ~60-80% higher at 25°C.
     "glycol50": CoolantProperties(1060.0, 3400.0, 0.40, 0.00480),
 }
 
@@ -65,6 +72,9 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     nu, regime = _nusselt(re, pr)
     h = nu * props.k_w_mk / geom.hydraulic_diameter_m
 
+    # ASSUMPTION: circular channel perimeter (π×Dh) used for wetted area. For square channels
+    # (consistent with the cross-section assumption above), use 4×channel_width×channel_length.
+    # This underestimates wetted area by ~22% vs square, conservatively overpredicting Tj.
     wetted_area = geom.channel_count * pi * geom.hydraulic_diameter_m * geom.channel_length_m
     r_conv = 1.0 / (h * wetted_area)
     r_base = geom.base_thickness_m / (geom.copper_k_w_mk * geom.contact_area_m2)
@@ -108,7 +118,12 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     )
 
 
-def optimize_flow(inp, max_iter: int = 40):
+def optimize_flow(inp: OptimizeFlowRateInput, max_iter: int = 40) -> tuple[float, AnalyzeColdplateOutput | None]:
+    """Binary search for minimum flow rate meeting the junction temperature target.
+
+    Returns (minimum_flow_lpm, analysis_at_minimum_flow). If no flow rate in
+    [flow_min_lpm, flow_max_lpm] meets the target, returns (flow_max_lpm, None).
+    """
     lo, hi = inp.flow_min_lpm, inp.flow_max_lpm
     best = None
     for _ in range(max_iter):

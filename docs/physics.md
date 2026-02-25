@@ -56,7 +56,7 @@ Thermal path:
 
 Coolant table (nominal, room-temperature):
 - Water: `rho=997 kg/m3`, `cp=4180 J/kg-K`, `k=0.60 W/m-K`, `mu=0.00089 Pa*s`
-- 50/50 glycol: `rho=1060 kg/m3`, `cp=3400 J/kg-K`, `k=0.40 W/m-K`, `mu=0.0048 Pa*s`
+- Ethylene glycol 50% (by volume, 25°C nominal): `rho=1060 kg/m3`, `cp=3400 J/kg-K`, `k=0.40 W/m-K`, `mu=0.0048 Pa*s`. For propylene glycol, viscosity is ~60-80% higher at 25°C.
 
 ## E) Limitations
 - No manifold-loss model or channel maldistribution.
