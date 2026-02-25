@@ -68,6 +68,8 @@ flowchart LR
 ```bash
 git clone https://github.com/riccardovietri/thermal-mcp-server.git
 cd thermal-mcp-server
+python -m venv venv
+source venv/bin/activate
 pip install -e .
 ```
 
@@ -77,7 +79,7 @@ Configure in your MCP client (e.g., Claude Desktop `claude_desktop_config.json`)
 {
   "mcpServers": {
     "thermal": {
-      "command": "python",
+      "command": "/absolute/path/to/thermal-mcp-server/venv/bin/python",
       "args": ["-m", "thermal_mcp_server"],
       "cwd": "/absolute/path/to/thermal-mcp-server"
     }
@@ -85,19 +87,21 @@ Configure in your MCP client (e.g., Claude Desktop `claude_desktop_config.json`)
 }
 ```
 
+> **Important:** Use the absolute path to your venv's Python binary. Claude Desktop does not inherit your shell's PATH, so bare `python` will fail with "No such file or directory."
+
 See the [MCP documentation](https://modelcontextprotocol.io/) for client setup details.
 
 ## Usage with Claude
 
 Once configured, ask Claude natural-language questions about liquid cooling:
 
-> *"I'm running 8 H100 SXM GPUs at 700 W each with water cooling at 8 LPM per cold plate and 25°C inlet. What's the junction temperature and am I within thermal margin?"*
+> *"I have 8 H100 SXM GPUs at 700 W each with water cooling at 8 LPM per cold plate and 25°C inlet. What's the junction temperature and am I within thermal margin?"*
 
 Claude calls `analyze_coldplate` and interprets the result:
 
-> *"At 8 LPM with 25°C inlet water, each H100 runs at 71.7°C junction — 11.3°C below the 83°C throttle onset. Convective resistance (R_conv ≈ 0.004 K/W) is the dominant term after package resistances. You have room to reduce flow to ~5.5 LPM before hitting margin, which would cut pump power roughly in half."*
+> *"At 8 LPM with 25°C inlet water, each H100 runs at 71.7°C junction — 11.3°C below the 83°C throttle onset. Convective resistance (0.005 K/W) is small relative to the package resistances (R_jc + R_tim = 0.06 K/W), so increasing flow rate has diminishing returns. You have room to reduce flow to ~5.5 LPM before hitting margin, which would cut pump power roughly in half."*
 
-This works in Claude Desktop, Claude.ai Projects, or any MCP-compatible client.
+This works in Claude Desktop, Claude.ai with MCP, or any MCP-compatible client.
 
 ## Tools
 
