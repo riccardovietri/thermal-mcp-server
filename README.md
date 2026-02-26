@@ -1,4 +1,6 @@
 [![CI](https://github.com/riccardovietri/thermal-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/riccardovietri/thermal-mcp-server/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/thermal-mcp-server)](https://pypi.org/project/thermal-mcp-server/)
+[![Python 3.10+](https://img.shields.io/pypi/pyversions/thermal-mcp-server)](https://pypi.org/project/thermal-mcp-server/)
 
 # thermal-mcp-server
 
@@ -66,12 +68,12 @@ flowchart LR
 
 ## Quick Start
 
+**Install from PyPI:**
+
 ```bash
-git clone https://github.com/riccardovietri/thermal-mcp-server.git
-cd thermal-mcp-server
-python -m venv venv
-source venv/bin/activate
-pip install -e .
+python -m venv thermal-venv
+source thermal-venv/bin/activate
+pip install thermal-mcp-server
 ```
 
 Configure in your MCP client (e.g., Claude Desktop `claude_desktop_config.json`):
@@ -80,15 +82,23 @@ Configure in your MCP client (e.g., Claude Desktop `claude_desktop_config.json`)
 {
   "mcpServers": {
     "thermal": {
-      "command": "/absolute/path/to/thermal-mcp-server/venv/bin/python",
-      "args": ["-m", "thermal_mcp_server"],
-      "cwd": "/absolute/path/to/thermal-mcp-server"
+      "command": "/absolute/path/to/thermal-venv/bin/python",
+      "args": ["-m", "thermal_mcp_server"]
     }
   }
 }
 ```
 
 > **Important:** Use the absolute path to your venv's Python binary. Claude Desktop does not inherit your shell's PATH, so bare `python` will fail with "No such file or directory."
+
+**Install from source** (for development):
+
+```bash
+git clone https://github.com/riccardovietri/thermal-mcp-server.git
+cd thermal-mcp-server
+python -m venv venv && source venv/bin/activate
+pip install -e .
+```
 
 See the [MCP documentation](https://modelcontextprotocol.io/) for client setup details.
 
