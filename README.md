@@ -53,6 +53,7 @@ result = analyze(AnalyzeColdplateInput(
 
 At 10 LPM water with 35°C inlet, the H100 runs at 80.7°C junction — 2.3°C of margin below the 83°C throttle point. This is a tight operating point at these inlet conditions; reducing inlet temperature to 25°C or increasing flow rate would add margin.
 
+
 ## How It Works
 
 The physics engine models a single cold plate as a 1D thermal resistance network: junction-to-case (R_jc), thermal interface material (R_tim), copper base conduction, and forced convection to the coolant. Convective heat transfer uses the Dittus-Boelter correlation for turbulent flow and a constant Nu = 4.36 for laminar flow, with linear blending in the transition regime (Re 2300–4000). Pressure drop uses Darcy-Weisbach with Blasius friction factor, also blended through the transition regime. All assumptions — pump efficiency, channel geometry, property values — are documented inline in the source.
@@ -99,9 +100,11 @@ Once configured, ask Claude natural-language questions about liquid cooling:
 
 Claude calls `analyze_coldplate` and interprets the result:
 
-> *"At 8 LPM with 25°C inlet water, each H100 runs at 71.7°C junction — 11.3°C below the 83°C throttle onset. Convective resistance (0.005 K/W) is small relative to the package resistances (R_jc + R_tim = 0.06 K/W), so increasing flow rate has diminishing returns. You have room to reduce flow to ~5.5 LPM before hitting margin, which would cut pump power roughly in half."*
+> *"At 8 LPM with 25°C inlet water, each H100 runs at 70.9°C junction — 11.3°C below the 83°C throttle onset. Convective resistance (0.005 K/W) is small relative to the package resistances (R_jc + R_tim = 0.06 K/W), so increasing flow rate has diminishing returns. You have room to reduce flow to ~5.5 LPM before hitting margin, which would cut pump power roughly in half."*
 
 This works in Claude Desktop, Claude.ai with MCP, or any MCP-compatible client.
+
+<img width="1768" height="1750" alt="image" src="https://github.com/user-attachments/assets/7e3fb436-38d2-477b-a4dd-e5a2a740d463" />
 
 ## Tools
 
