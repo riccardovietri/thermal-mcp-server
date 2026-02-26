@@ -13,38 +13,19 @@ CoolantName = Literal["water", "glycol50"]
 class Geometry(BaseModel):
     """Cold plate geometry and material parameters.
 
-    Assumes square micro-channels (channel_width_m == hydraulic_diameter_m).
+    Assumes rectangular micro-channels. Hydraulic diameter is computed automatically:
+    Dh = 2 × width × height / (width + height).
     Defaults represent a typical copper cold plate: 40 × 1 mm square channels,
     80 mm long, 2 mm base, 100 cm² contact area.
     """
 
     channel_count: int = Field(default=40, ge=1, description="Number of parallel coolant channels")
-    hydraulic_diameter_m: float = Field(default=1.0e-3, gt=0, description="Channel hydraulic diameter in metres (= side length for square channels)")
+    channel_width_m: float = Field(default=1.0e-3, gt=0, description="Channel width in metres")
+    channel_height_m: float = Field(default=1.0e-3, gt=0, description="Channel height in metres (= width for square channels)")
     channel_length_m: float = Field(default=0.08, gt=0, description="Channel flow-path length in metres")
-    channel_width_m: float = Field(default=1.0e-3, gt=0, description="Channel width in metres; must equal hydraulic_diameter_m for the square-channel assumption to hold")
     base_thickness_m: float = Field(default=2.0e-3, gt=0, description="Cold plate base (spreader) thickness in metres")
     contact_area_m2: float = Field(default=0.01, gt=0, description="Chip-to-cold-plate contact area in m² (default 100 cm²)")
     copper_k_w_mk: float = Field(default=385.0, gt=0, description="Base plate thermal conductivity in W/(m·K); default is pure copper")
-
-    @model_validator(mode="after")
-    def square_channel_assumption(self) -> "Geometry":
-        """Enforce square-channel constraint: width must equal hydraulic diameter.
-
-        The physics engine uses area = count × width × Dh and
-        wetted perimeter = count × 4 × width × length, both of which are only
-        correct when width == Dh (square cross-section). Passing mismatched values
-        produces silently wrong Tj and ΔP results.
-        """
-        ratio = abs(self.channel_width_m - self.hydraulic_diameter_m) / self.hydraulic_diameter_m
-        if ratio > 0.01:
-            raise ValueError(
-                f"channel_width_m ({self.channel_width_m*1e3:.3f} mm) must equal "
-                f"hydraulic_diameter_m ({self.hydraulic_diameter_m*1e3:.3f} mm). "
-                "The physics model assumes square channels. For rectangular channels "
-                "set both to the hydraulic diameter of your geometry: "
-                "Dh = 2*w*h / (w+h)."
-            )
-        return self
 
 
 class AnalyzeColdplateInput(BaseModel):

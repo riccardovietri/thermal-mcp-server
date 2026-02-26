@@ -28,16 +28,18 @@ COOLANTS: dict[str, CoolantProperties] = {
 }
 
 
-def _flow_quantities(inp: AnalyzeColdplateInput) -> tuple[float, float, float, float]:
+def _flow_quantities(inp: AnalyzeColdplateInput) -> tuple[float, float, float, float, float]:
     geom = inp.geometry
     props = COOLANTS[inp.coolant]
     flow_m3s = inp.flow_rate_lpm / 1000.0 / 60.0
-    # ASSUMPTION: square channel cross-section (side = channel_width). For rectangular channels, replace with width × height.
-    area_total = geom.channel_count * geom.channel_width_m * geom.hydraulic_diameter_m
+    w, h = geom.channel_width_m, geom.channel_height_m
+    # Rectangular cross-section; Dh = 4A/P = 2wh/(w+h)
+    dh = 2 * w * h / (w + h)
+    area_total = geom.channel_count * w * h
     velocity = flow_m3s / area_total
-    re = props.density_kg_m3 * velocity * geom.hydraulic_diameter_m / props.mu_pa_s
+    re = props.density_kg_m3 * velocity * dh / props.mu_pa_s
     pr = props.cp_j_kgk * props.mu_pa_s / props.k_w_mk
-    return flow_m3s, velocity, re, pr
+    return flow_m3s, velocity, re, pr, dh
 
 
 def _nusselt(re: float, pr: float) -> tuple[float, str]:
@@ -66,14 +68,13 @@ def _friction_factor(re: float) -> float:
 def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     props = COOLANTS[inp.coolant]
     geom = inp.geometry
-    flow_m3s, velocity, re, pr = _flow_quantities(inp)
+    flow_m3s, velocity, re, pr, dh = _flow_quantities(inp)
 
     nu, regime = _nusselt(re, pr)
-    h = nu * props.k_w_mk / geom.hydraulic_diameter_m
+    h = nu * props.k_w_mk / dh
 
-    # Square channel: wetted perimeter = 4 * side = 4 * Dh (since Dh = side for a square channel).
-    # Consistent with cross-section assumption above (area = channel_width * Dh = side^2).
-    wetted_area = geom.channel_count * 4 * geom.channel_width_m * geom.channel_length_m
+    # Rectangular channel: wetted perimeter = 2 * (width + height) per channel.
+    wetted_area = geom.channel_count * 2 * (geom.channel_width_m + geom.channel_height_m) * geom.channel_length_m
     r_conv = 1.0 / (h * wetted_area)
     r_base = geom.base_thickness_m / (geom.copper_k_w_mk * geom.contact_area_m2)
     r_total = inp.r_jc_k_per_w + inp.r_tim_k_per_w + r_base + r_conv
@@ -84,7 +85,7 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     t_j = t_bulk + inp.heat_load_w * r_total
 
     f = _friction_factor(re)
-    dp = f * (geom.channel_length_m / geom.hydraulic_diameter_m) * (props.density_kg_m3 * velocity**2 / 2)
+    dp = f * (geom.channel_length_m / dh) * (props.density_kg_m3 * velocity**2 / 2)
     # ASSUMPTION: 50% pump efficiency (typical centrifugal pump at partial load). Adjust for specific pump curve.
     pump_power = dp * flow_m3s / 0.5
 
