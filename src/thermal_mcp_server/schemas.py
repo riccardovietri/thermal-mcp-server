@@ -28,7 +28,7 @@ class AnalyzeColdplateInput(BaseModel):
     heat_load_w: float = Field(default=700.0, gt=0)
     flow_rate_lpm: float = Field(default=8.0, gt=0)
     inlet_temp_c: float = Field(default=25.0, ge=-20.0, le=80.0)
-    ambient_temp_c: float = Field(default=25.0, ge=-40.0, le=80.0)
+    ambient_temp_c: float = Field(default=25.0, ge=-40.0, le=80.0)  # Reserved for future use (facility-level models). Not used in current cold plate analysis.
     coolant: CoolantName = "water"
     r_jc_k_per_w: float = Field(default=0.04, ge=0)
     r_tim_k_per_w: float = Field(default=0.02, ge=0)

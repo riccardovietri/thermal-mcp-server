@@ -36,7 +36,8 @@ Thermal path:
   - `<2300`: laminar
   - `2300-4000`: transitional (explicit blend for numerical smoothness)
   - `>4000`: turbulent
-- Pressure drop and convection both switch with regime.
+- Both Nusselt number and friction factor are linearly blended in the transition regime (Re 2300–4000) to avoid discontinuities. The friction factor blends between the laminar value at Re=2300 (`64/2300 ≈ 0.0278`) and the Blasius turbulent value at Re=4000 (`0.3164 × 4000^−0.25 ≈ 0.0398`), matching the Nusselt number treatment.
+- Pump power is computed as `ΔP × Q / η` with η = 0.50 (50% pump efficiency). This is representative for a centrifugal pump at partial load; users should adjust for their specific pump curve when sizing actual hardware.
 
 ## D) Parameters and defaults
 - Heat load: `700 W`
@@ -55,7 +56,7 @@ Thermal path:
 
 Coolant table (nominal, room-temperature):
 - Water: `rho=997 kg/m3`, `cp=4180 J/kg-K`, `k=0.60 W/m-K`, `mu=0.00089 Pa*s`
-- 50/50 glycol: `rho=1060 kg/m3`, `cp=3400 J/kg-K`, `k=0.40 W/m-K`, `mu=0.0048 Pa*s`
+- Ethylene glycol 50% (by volume, 25°C nominal): `rho=1060 kg/m3`, `cp=3400 J/kg-K`, `k=0.40 W/m-K`, `mu=0.0048 Pa*s`. For propylene glycol, viscosity is ~60-80% higher at 25°C.
 
 ## E) Limitations
 - No manifold-loss model or channel maldistribution.

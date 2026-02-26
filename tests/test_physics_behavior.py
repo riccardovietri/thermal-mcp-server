@@ -55,12 +55,12 @@ def test_hand_calc_validation_700w_water():
       Pr = 4180 * 0.00089 / 0.60 = 6.20
       Nu = 0.023 * 4668^0.8 * 6.20^0.4 = 41.1
       h  = 41.1 * 0.60 / 0.001 = 24667 W/m2-K
-      A_wet = 40 * pi * 0.001 * 0.08 = 0.01005 m2
-      R_conv = 1/(24667 * 0.01005) = 0.00403 K/W
+      A_wet = 40 * 4 * 0.001 * 0.08 = 0.01280 m2  (square channel: perimeter = 4 * side)
+      R_conv = 1/(24667 * 0.01280) = 0.00317 K/W
       R_base = 0.002/(385 * 0.01) = 0.000519 K/W
-      R_total = 0.1 + 0.05 + 0.000519 + 0.00403 = 0.1546 K/W
+      R_total = 0.1 + 0.05 + 0.000519 + 0.00317 = 0.15369 K/W
       Coolant rise = 700/(997 * 1.667e-4 * 4180) = 1.008 C
-      T_j = 25 + 0.504 + 700 * 0.1546 = 133.7 C
+      T_j = 25 + 0.504 + 700 * 0.15369 = 133.1 C
     """
     result = analyze(AnalyzeColdplateInput(
         heat_load_w=700,
@@ -71,9 +71,9 @@ def test_hand_calc_validation_700w_water():
         r_tim_k_per_w=0.05,
     ))
 
-    # Junction temperature: hand calc gives 133.7 C
-    assert abs(result.junction_temp_c - 133.7) < 1.0, (
-        f"Tj={result.junction_temp_c:.1f} C, expected ~133.7 C"
+    # Junction temperature: hand calc gives 133.1 C
+    assert abs(result.junction_temp_c - 133.1) < 1.0, (
+        f"Tj={result.junction_temp_c:.1f} C, expected ~133.1 C"
     )
 
     # Reynolds number: hand calc gives 4668
@@ -84,9 +84,9 @@ def test_hand_calc_validation_700w_water():
     # Regime should be turbulent (Re > 4000)
     assert result.regime == "turbulent"
 
-    # Total thermal resistance: hand calc gives 0.1546 K/W
-    assert abs(result.resistances_k_per_w["total"] - 0.1546) < 0.001, (
-        f"R_total={result.resistances_k_per_w['total']:.4f}, expected ~0.1546"
+    # Total thermal resistance: hand calc gives 0.15369 K/W
+    assert abs(result.resistances_k_per_w["total"] - 0.15369) < 0.001, (
+        f"R_total={result.resistances_k_per_w['total']:.5f}, expected ~0.15369"
     )
 
     # Coolant rise: hand calc gives 1.008 C
@@ -100,7 +100,7 @@ def test_hand_calc_validation_default_case():
     """Validate default case: 700W, 8 LPM, water, default R values.
 
     This is the 'typical GPU' case with R_jc=0.04, R_tim=0.02.
-    Hand calc gives Tj ~ 71.7 C (within expected 70-85 C range).
+    Hand calc gives Tj ~ 70.9 C (within expected 65-85 C range).
     """
     result = analyze(AnalyzeColdplateInput(
         heat_load_w=700, flow_rate_lpm=8, coolant="water"
@@ -111,8 +111,8 @@ def test_hand_calc_validation_default_case():
         f"Tj={result.junction_temp_c:.1f} C, expected 70-85 C range"
     )
 
-    # Specifically, hand calc gives 71.7 C
-    assert abs(result.junction_temp_c - 71.7) < 1.0
+    # Specifically, hand calc gives 70.9 C
+    assert abs(result.junction_temp_c - 70.9) < 1.0
 
     # Transitional flow regime at 8 LPM with default geometry
     assert result.regime == "transitional"
