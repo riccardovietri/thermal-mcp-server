@@ -7,7 +7,7 @@ name = "thermal-mcp-server"
 version = "0.2.0"
 description = "MCP server for datacenter GPU liquid cooling thermal analysis"
 authors = [{name = "Riccardo Vietri"}]
-license = {text = "MIT"}
+license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.10"
 keywords = ["mcp", "thermal", "cooling", "gpu", "datacenter", "liquid-cooling", "nvidia", "h100", "b200"]
