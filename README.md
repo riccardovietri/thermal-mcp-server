@@ -100,7 +100,7 @@ Once configured, ask Claude natural-language questions about liquid cooling:
 
 Claude calls `analyze_coldplate` and interprets the result:
 
-> *"At 8 LPM with 25°C inlet water, each H100 runs at 70.9°C junction — 11.3°C below the 83°C throttle onset. Convective resistance (0.005 K/W) is small relative to the package resistances (R_jc + R_tim = 0.06 K/W), so increasing flow rate has diminishing returns. You have room to reduce flow to ~5.5 LPM before hitting margin, which would cut pump power roughly in half."*
+> *"At 8 LPM with 25°C inlet water, each H100 runs at 70.9°C junction — 12.1°C below the 83°C throttle onset. Convective resistance (0.004 K/W) is small relative to the package resistances (R_jc + R_tim = 0.06 K/W), so increasing flow rate has diminishing returns. You have room to reduce flow to ~5.5 LPM before hitting margin, which would cut pump power roughly in half."*
 
 This works in Claude Desktop, Claude.ai with MCP, or any MCP-compatible client.
 

@@ -8,7 +8,6 @@ are documented inline. See docs/physics.md for full derivation and scope.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import pi
 
 from .schemas import AnalyzeColdplateInput, AnalyzeColdplateOutput, OptimizeFlowRateInput
 
