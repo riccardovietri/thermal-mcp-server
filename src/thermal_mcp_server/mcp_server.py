@@ -7,8 +7,8 @@ from typing import Any
 from fastmcp import FastMCP
 from pydantic import ValidationError
 
-from .physics import COOLANTS, analyze, optimize_flow
-from .schemas import AnalyzeColdplateInput, CompareCoolantsInput, Geometry, OptimizeFlowRateInput
+from .physics import COOLANTS, analyze, analyze_rack, optimize_flow
+from .schemas import AnalyzeColdplateInput, AnalyzeRackInput, CompareCoolantsInput, Geometry, OptimizeFlowRateInput
 
 mcp = FastMCP("thermal-mcp-server")
 
@@ -179,6 +179,78 @@ def optimize_flow_rate(
         heat_load_w, max_junction_temp_c, coolant, inlet_temp_c,
         ambient_temp_c, flow_min_lpm, flow_max_lpm,
         r_jc_k_per_w, r_tim_k_per_w, geometry,
+    )
+
+
+def analyze_rack_impl(
+    gpu_count: int,
+    topology: str,
+    heat_load_per_gpu_w: float,
+    total_flow_lpm: float,
+    cdu_supply_temp_c: float = 25.0,
+    coolant: str = "water",
+    r_jc_k_per_w: float = 0.04,
+    r_tim_k_per_w: float = 0.02,
+    geometry: dict[str, Any] | None = None,
+) -> dict:
+    try:
+        payload = AnalyzeRackInput(
+            gpu_count=gpu_count,
+            topology=topology,
+            heat_load_per_gpu_w=heat_load_per_gpu_w,
+            total_flow_lpm=total_flow_lpm,
+            cdu_supply_temp_c=cdu_supply_temp_c,
+            coolant=coolant,
+            r_jc_k_per_w=r_jc_k_per_w,
+            r_tim_k_per_w=r_tim_k_per_w,
+            geometry=_geometry_from_dict(geometry),
+        )
+    except ValidationError as exc:
+        return {"error": exc.errors()}
+    return analyze_rack(payload).model_dump()
+
+
+@mcp.tool(name="analyze_rack")
+def analyze_rack_tool(
+    gpu_count: int,
+    topology: str,
+    heat_load_per_gpu_w: float,
+    total_flow_lpm: float,
+    cdu_supply_temp_c: float = 25.0,
+    coolant: str = "water",
+    r_jc_k_per_w: float = 0.04,
+    r_tim_k_per_w: float = 0.02,
+    geometry: dict[str, Any] | None = None,
+):
+    """Rack-level thermal analysis for N identical GPU cold plates.
+
+    Models steady-state heat removal across a full rack using either series
+    or parallel plumbing topology.
+
+    Series: coolant flows through each cold plate in sequence. Each GPU's
+    inlet temperature equals the previous GPU's outlet. Pressure drop accumulates
+    (ΔP_total = N × ΔP_per_plate). Hottest GPU is always the last in the chain.
+
+    Parallel: coolant splits equally to all cold plates. All GPUs share the
+    same inlet temperature. Flow per GPU = total_flow_lpm / gpu_count.
+    System ΔP equals per-plate ΔP (not cumulative).
+
+    Assumptions: identical GPUs, uniform flow distribution, no manifold losses.
+
+    Args:
+        gpu_count: Number of GPU cold plates in the rack (1–256).
+        topology: Plumbing layout — "series" or "parallel".
+        heat_load_per_gpu_w: Thermal design power per GPU in watts.
+        total_flow_lpm: Total CDU coolant flow rate in L/min.
+        cdu_supply_temp_c: CDU supply temperature at rack inlet in °C.
+        coolant: Coolant type — "water" or "glycol50".
+        r_jc_k_per_w: Junction-to-case thermal resistance per GPU in K/W.
+        r_tim_k_per_w: TIM resistance per GPU in K/W.
+        geometry: Optional cold plate geometry overrides (same for all GPUs).
+    """
+    return analyze_rack_impl(
+        gpu_count, topology, heat_load_per_gpu_w, total_flow_lpm,
+        cdu_supply_temp_c, coolant, r_jc_k_per_w, r_tim_k_per_w, geometry,
     )
 
 
