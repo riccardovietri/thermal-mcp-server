@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 CoolantName = Literal["water", "glycol50"]
@@ -18,6 +18,8 @@ class Geometry(BaseModel):
     Defaults represent a typical copper cold plate: 40 × 1 mm square channels,
     80 mm long, 2 mm base, 100 cm² contact area.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     channel_count: int = Field(default=40, ge=1, description="Number of parallel coolant channels")
     channel_width_m: float = Field(default=1.0e-3, gt=0, description="Channel width in metres")
