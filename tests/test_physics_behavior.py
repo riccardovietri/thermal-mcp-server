@@ -47,15 +47,18 @@ def test_invalid_inputs_rejected():
 def test_hand_calc_validation_700w_water():
     """Validate model against independent hand calculation.
 
-    Case: 700W GPU, water coolant, 10 LPM, default geometry.
+    Case: 700W GPU, water coolant, 10 LPM, default geometry (w=h=1mm square).
     R_jc = 0.1 K/W, R_tim = 0.05 K/W (conservative thermal stack).
 
     Hand calculation (independent of model code):
-      Re = 997 * 4.167 * 0.001 / 0.00089 = 4668 (turbulent)
-      Pr = 4180 * 0.00089 / 0.60 = 6.20
-      Nu = 0.023 * 4668^0.8 * 6.20^0.4 = 41.1
-      h  = 41.1 * 0.60 / 0.001 = 24667 W/m2-K
-      A_wet = 40 * 4 * 0.001 * 0.08 = 0.01280 m2  (square channel: perimeter = 4 * side)
+      Dh   = 2*0.001*0.001 / (0.001+0.001) = 0.001 m  (rectangular: Dh = 2wh/(w+h))
+      v    = (10/60000) / (40 * 0.001 * 0.001) = 4.167 m/s
+      Re   = 997 * 4.167 * 0.001 / 0.00089 = 4668 (turbulent)
+      Pr   = 4180 * 0.00089 / 0.60 = 6.20
+      Nu   = 0.023 * 4668^0.8 * 6.20^0.4 = 41.1
+      h    = 41.1 * 0.60 / 0.001 = 24667 W/m2-K
+      P_ch = 2 * (0.001 + 0.001) = 0.004 m  (rectangular perimeter)
+      A_wet = 40 * 0.004 * 0.08 = 0.01280 m2
       R_conv = 1/(24667 * 0.01280) = 0.00317 K/W
       R_base = 0.002/(385 * 0.01) = 0.000519 K/W
       R_total = 0.1 + 0.05 + 0.000519 + 0.00317 = 0.15369 K/W
