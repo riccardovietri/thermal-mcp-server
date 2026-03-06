@@ -117,6 +117,31 @@ See `docs/strategy.md` for full context. In order of portfolio impact:
 3. **MCP test completeness** — error paths, `met_target: False` case,
    geometry passthrough, `compare_coolants` depth check.
 
+## Ask vs. proceed
+
+Stop and surface to the user before proceeding when the change involves:
+- Geometry defaults (channel dimensions, contact area, copper_k) — affects hand-calc tests
+- Temperature targets or Tj limits in examples/
+- Coolant property values or adding a new coolant
+- Any model limitation that should be disclosed to the caller
+- API-breaking schema changes (renaming or removing fields)
+
+Proceed autonomously for:
+- Single-point analysis, bug fixes, test additions
+- Documentation and docstring updates
+- Adding new examples that don't change existing behavior
+- Refactoring that doesn't touch physics equations
+
+## Physics correctness gate
+
+Before marking any physics change as done, verify:
+1. Units are consistent — resistance calcs in Kelvin, I/O in Celsius
+2. Dimensional analysis passes — check every term in each equation
+3. Energy balance closes within 1%: Q_input ≈ m_dot × cp × ΔT_coolant + losses
+4. `docs/physics.md` updated with justification
+5. Hand-calc test added or updated with new expected values
+6. `pytest` passes with no tolerance relaxation
+
 ## Branch / PR conventions
 
 - Main branch is the stable baseline. PRs from `claude/` branches.
