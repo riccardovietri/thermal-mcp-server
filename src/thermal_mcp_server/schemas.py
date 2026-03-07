@@ -118,6 +118,12 @@ class AnalyzeRackInput(BaseModel):
     heat_load_per_gpu_w: float = Field(default=700.0, gt=0, description="Heat dissipation per GPU in watts")
     total_flow_lpm: float = Field(default=64.0, gt=0, description="Total CDU coolant flow rate in L/min")
     cdu_supply_temp_c: float = Field(default=25.0, ge=-20.0, le=80.0, description="CDU supply (rack inlet) temperature in °C")
+    ambient_temp_c: float | None = Field(
+        default=None,
+        ge=-40.0,
+        le=80.0,
+        description="Optional ambient reference temperature in °C. If omitted, defaults to cdu_supply_temp_c during rack analysis.",
+    )
     coolant: CoolantName = "water"
     r_jc_k_per_w: float = Field(default=0.04, ge=0, description="Junction-to-case thermal resistance per GPU in K/W")
     r_tim_k_per_w: float = Field(default=0.02, ge=0, description="Thermal interface material resistance per GPU in K/W")

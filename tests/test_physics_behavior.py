@@ -280,3 +280,44 @@ def test_rack_parallel_vs_series_tradeoff():
 
     # Series has higher total ΔP (4× vs 1× single plate)
     assert series.total_pressure_drop_pa > parallel.total_pressure_drop_pa
+
+
+def test_rack_chilled_supply_defaults_ambient_to_cdu_supply():
+    """Low CDU supply temperatures should not fail when ambient is omitted."""
+    series = analyze_rack(AnalyzeRackInput(
+        gpu_count=2,
+        topology="series",
+        heat_load_per_gpu_w=700.0,
+        total_flow_lpm=8.0,
+        cdu_supply_temp_c=-10.0,
+        coolant="water",
+    ))
+    parallel = analyze_rack(AnalyzeRackInput(
+        gpu_count=2,
+        topology="parallel",
+        heat_load_per_gpu_w=700.0,
+        total_flow_lpm=16.0,
+        cdu_supply_temp_c=-10.0,
+        coolant="water",
+    ))
+
+    assert len(series.per_gpu_junction_temps_c) == 2
+    assert len(parallel.per_gpu_junction_temps_c) == 2
+    assert series.cdu_outlet_temp_c > -10.0
+    assert parallel.cdu_outlet_temp_c > -10.0
+
+
+def test_rack_explicit_ambient_passthrough():
+    """Rack ambient should be passed through to per-GPU cold plate inputs."""
+    rack = analyze_rack(AnalyzeRackInput(
+        gpu_count=2,
+        topology="parallel",
+        heat_load_per_gpu_w=700.0,
+        total_flow_lpm=16.0,
+        cdu_supply_temp_c=25.0,
+        ambient_temp_c=10.0,
+        coolant="water",
+    ))
+
+    assert len(rack.per_gpu_junction_temps_c) == 2
+    assert all(tj > 25.0 for tj in rack.per_gpu_junction_temps_c)

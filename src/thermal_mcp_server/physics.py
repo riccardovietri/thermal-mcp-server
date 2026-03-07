@@ -143,6 +143,7 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
     """
     props = COOLANTS[inp.coolant]
     flow_m3s = inp.total_flow_lpm / 1000.0 / 60.0
+    effective_ambient = inp.ambient_temp_c if inp.ambient_temp_c is not None else inp.cdu_supply_temp_c
     per_gpu_warnings: list[str] = []
 
     if inp.topology == "series":
@@ -156,6 +157,7 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
                 heat_load_w=inp.heat_load_per_gpu_w,
                 flow_rate_lpm=flow_per_gpu_lpm,
                 inlet_temp_c=current_inlet,
+                ambient_temp_c=effective_ambient,
                 coolant=inp.coolant,
                 r_jc_k_per_w=inp.r_jc_k_per_w,
                 r_tim_k_per_w=inp.r_tim_k_per_w,
@@ -181,6 +183,7 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
             heat_load_w=inp.heat_load_per_gpu_w,
             flow_rate_lpm=flow_per_gpu_lpm,
             inlet_temp_c=inp.cdu_supply_temp_c,
+            ambient_temp_c=effective_ambient,
             coolant=inp.coolant,
             r_jc_k_per_w=inp.r_jc_k_per_w,
             r_tim_k_per_w=inp.r_tim_k_per_w,

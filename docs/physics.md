@@ -149,6 +149,9 @@ P_pump = ΔP_total × (Q_total / 60000) / 0.50
 
 ### Assumptions and limitations
 
+- **Ambient reference handling:** `ambient_temp_c` is optional for rack inputs.
+  If omitted, rack analysis defaults ambient reference to `T_cdu_supply` when
+  constructing per-GPU cold plate analyses.
 - **Identical GPUs:** All cold plates have the same TDP, geometry, and thermal
   resistances. Heterogeneous racks (mix of GPU types) are not supported.
 - **Uniform flow distribution:** No maldistribution between parallel branches.

@@ -188,6 +188,7 @@ def analyze_rack_impl(
     heat_load_per_gpu_w: float,
     total_flow_lpm: float,
     cdu_supply_temp_c: float = 25.0,
+    ambient_temp_c: float | None = None,
     coolant: str = "water",
     r_jc_k_per_w: float = 0.04,
     r_tim_k_per_w: float = 0.02,
@@ -200,6 +201,7 @@ def analyze_rack_impl(
             heat_load_per_gpu_w=heat_load_per_gpu_w,
             total_flow_lpm=total_flow_lpm,
             cdu_supply_temp_c=cdu_supply_temp_c,
+            ambient_temp_c=ambient_temp_c,
             coolant=coolant,
             r_jc_k_per_w=r_jc_k_per_w,
             r_tim_k_per_w=r_tim_k_per_w,
@@ -217,6 +219,7 @@ def analyze_rack_tool(
     heat_load_per_gpu_w: float,
     total_flow_lpm: float,
     cdu_supply_temp_c: float = 25.0,
+    ambient_temp_c: float | None = None,
     coolant: str = "water",
     r_jc_k_per_w: float = 0.04,
     r_tim_k_per_w: float = 0.02,
@@ -236,6 +239,8 @@ def analyze_rack_tool(
     System ΔP equals per-plate ΔP (not cumulative).
 
     Assumptions: identical GPUs, uniform flow distribution, no manifold losses.
+    Ambient temperature is optional; if omitted, rack analysis defaults ambient
+    reference to cdu_supply_temp_c.
 
     Args:
         gpu_count: Number of GPU cold plates in the rack (1–256).
@@ -243,6 +248,8 @@ def analyze_rack_tool(
         heat_load_per_gpu_w: Thermal design power per GPU in watts.
         total_flow_lpm: Total CDU coolant flow rate in L/min.
         cdu_supply_temp_c: CDU supply temperature at rack inlet in °C.
+        ambient_temp_c: Optional ambient reference temperature in °C.
+            Defaults to cdu_supply_temp_c when omitted.
         coolant: Coolant type — "water" or "glycol50".
         r_jc_k_per_w: Junction-to-case thermal resistance per GPU in K/W.
         r_tim_k_per_w: TIM resistance per GPU in K/W.
@@ -250,7 +257,7 @@ def analyze_rack_tool(
     """
     return analyze_rack_impl(
         gpu_count, topology, heat_load_per_gpu_w, total_flow_lpm,
-        cdu_supply_temp_c, coolant, r_jc_k_per_w, r_tim_k_per_w, geometry,
+        cdu_supply_temp_c, ambient_temp_c, coolant, r_jc_k_per_w, r_tim_k_per_w, geometry,
     )
 
 
