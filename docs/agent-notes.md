@@ -3,13 +3,21 @@
 Living document for AI coding agents. Updated each session. Summarizes work done,
 decisions made, and queued tasks so future agents can orient quickly.
 
-*Last updated: 2026-03-06*
+*Last updated: 2026-03-07*
 
 ---
 
 ## Current branch
 
 `claude/review-project-strategy-ODSRh`
+
+---
+
+## Status
+
+PR11 (rack-level model) is **implemented, tested (14/14), reviewed, and pushed**.
+Branch `claude/review-project-strategy-ODSRh` is ready for PR creation and merge.
+CLAUDE.md has been updated to reflect the new `analyze_rack` tool and revised gap list.
 
 ---
 
@@ -142,6 +150,7 @@ Useful for building a public-facing demo of the tool's conversational capability
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-03-07 | CLAUDE.md updated: rack model done, gaps re-prioritized | Future agents see current state immediately |
 | 2026-03-06 | Rack model before MCP tests (PR11 before PR10) | Highest portfolio impact; MCP tests are a quick follow-on |
 | 2026-03-06 | Series/parallel as Literal, not Enum | Consistent with existing `CoolantName` pattern in codebase |
 | 2026-03-06 | `per_gpu_junction_temps_c: list[float]` not full per-GPU results | Full results = N× data volume; Tj list is sufficient for rack-level decisions |
