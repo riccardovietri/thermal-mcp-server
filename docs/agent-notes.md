@@ -19,6 +19,11 @@ PR11 (rack-level model) is **implemented, tested (14/14), reviewed, and pushed**
 Branch `claude/review-project-strategy-ODSRh` is ready for PR creation and merge.
 CLAUDE.md has been updated to reflect the new `analyze_rack` tool and revised gap list.
 
+Repo memory now has a cross-agent structure:
+- `AGENTS.md` added as the tool-neutral entrypoint
+- `docs/decisions.md` added for durable architectural/modeling decisions
+- `docs/local-agent-bootstrap.md` added with a reusable prompt for local agent setup
+
 ---
 
 ## Work completed (this session)

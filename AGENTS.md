@@ -1,0 +1,82 @@
+# AGENTS.md — thermal-mcp-server
+
+Cross-agent project memory for Codex, Claude Code, and other coding agents.
+Read this file first. Use it as the tool-neutral contract. For deeper project
+detail, then read `CLAUDE.md` and `docs/agent-notes.md`.
+
+## Purpose
+
+This repo is a Python MCP server for first-principles thermal analysis of
+liquid-cooled GPU cold plates and simple rack topologies.
+
+Primary audience: thermal engineers and AI infrastructure teams.
+Primary portfolio goal: show physics credibility and practical AI tooling for
+H100/B200-class cooling analysis.
+
+## Source of truth
+
+Use the memory layers in this order:
+
+1. `AGENTS.md` — stable, cross-agent operating contract
+2. `CLAUDE.md` — project-specific workflow and detailed modeling guidance
+3. `docs/agent-notes.md` — current branch state, recent work, queued tasks
+4. `docs/decisions.md` — durable architectural and modeling decisions
+5. Code and tests — final authority on actual implementation
+
+Do not rely on chat/session memory for anything that should survive across
+agents or across days. If it matters later, write it into one of the files
+above.
+
+## Architecture
+
+Core modules:
+
+- `src/thermal_mcp_server/schemas.py` — Pydantic models, defaults, validation
+- `src/thermal_mcp_server/physics.py` — thermal and hydraulic calculations
+- `src/thermal_mcp_server/mcp_server.py` — thin FastMCP wrappers
+- `tests/test_physics_behavior.py` — numerical and hand-calculation validation
+
+Public Python entrypoints:
+
+- `analyze()`
+- `analyze_rack()`
+- `optimize_flow()`
+
+MCP tools:
+
+- `analyze_coldplate`
+- `compare_coolants`
+- `optimize_flow_rate`
+- `analyze_rack`
+
+## Working rules
+
+- Keep physics in `physics.py`, not in MCP wrapper code.
+- Treat defaults and coolant constants as controlled values.
+- Any physics change must update `docs/physics.md` and corresponding tests.
+- If a change affects expected numerical output, add or update a hand-calculation
+  test in `tests/test_physics_behavior.py`.
+- Do not weaken tolerances in hand-calculation tests without explicit approval.
+- Surface API-breaking schema changes before making them.
+
+## Memory placement
+
+Put information in the right place:
+
+- `AGENTS.md`: stable instructions all agents should follow
+- `CLAUDE.md`: richer workflow notes, guardrails, review protocol
+- `docs/agent-notes.md`: current progress, next tasks, temporary branch context
+- `docs/decisions.md`: decisions worth preserving after the current branch dies
+
+Do not use `docs/agent-notes.md` as the only place for important design choices.
+If a note will still matter after merge, promote it into `docs/decisions.md`.
+
+## Current priorities
+
+Current likely next engineering tasks:
+
+1. Improve MCP tool test completeness
+2. Add sensitivity / uncertainty output
+3. Keep rack-level model scope disciplined unless manifold losses are modeled properly
+
+Check `docs/agent-notes.md` for the up-to-date queue before starting work.
