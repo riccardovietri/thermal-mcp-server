@@ -1,7 +1,7 @@
 import pytest
 
-from thermal_mcp_server.physics import analyze
-from thermal_mcp_server.schemas import AnalyzeColdplateInput
+from thermal_mcp_server.physics import analyze, analyze_rack
+from thermal_mcp_server.schemas import AnalyzeColdplateInput, AnalyzeRackInput
 
 
 def test_tj_monotonic_with_flow():
@@ -122,3 +122,202 @@ def test_hand_calc_validation_default_case():
 
     # Pressure drop should be order of 10-50 kPa for microchannel cold plate
     assert 1000 < result.pressure_drop_pa < 100000
+
+
+# --- Rack-level model validation ---
+
+
+def test_rack_series_two_gpu_hand_calc():
+    """Hand-calc: 2 GPUs in series, 700W each, 8 LPM, 25°C CDU supply, water.
+
+    In series with constant fluid properties:
+    - GPU 1 is identical to a standalone analyze() at 25°C inlet.
+    - GPU 2 inlet = GPU 1 outlet = 25 + coolant_rise_1.
+    - Because fluid properties are constant, coolant_rise is the same for both GPUs.
+    - Derived: Tj[1] - Tj[0] = coolant_rise exactly (all R terms cancel).
+    - CDU outlet = supply + 2 × coolant_rise.
+    - Total ΔP = 2 × single-plate ΔP (same flow, same geometry, same ΔP per plate).
+
+    Hand calculation:
+      m_dot = (8/60/1000) × 997 = 0.13293 kg/s
+      coolant_rise = 700 / (0.13293 × 4180) = 1.260 °C
+      GPU 1 Tj  ≈ 70.9 °C  (default case, validated above)
+      GPU 2 Tj  ≈ 70.9 + 1.260 = 72.16 °C
+      CDU outlet = 25.0 + 2 × 1.260 = 27.52 °C
+      total_dp  = 2 × dp_single
+    """
+    single = analyze(AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, coolant="water"))
+
+    rack = analyze_rack(AnalyzeRackInput(
+        gpu_count=2,
+        topology="series",
+        heat_load_per_gpu_w=700.0,
+        total_flow_lpm=8.0,
+        cdu_supply_temp_c=25.0,
+        coolant="water",
+    ))
+
+    # GPU 0 must match standalone analysis at 25°C inlet
+    assert abs(rack.per_gpu_junction_temps_c[0] - single.junction_temp_c) < 0.01, (
+        f"GPU 0 Tj={rack.per_gpu_junction_temps_c[0]:.2f}, expected {single.junction_temp_c:.2f}"
+    )
+
+    # GPU 1 Tj = GPU 0 Tj + coolant_rise (exact relationship from algebra)
+    expected_tj1 = rack.per_gpu_junction_temps_c[0] + single.coolant_rise_c
+    assert abs(rack.per_gpu_junction_temps_c[1] - expected_tj1) < 0.01, (
+        f"GPU 1 Tj={rack.per_gpu_junction_temps_c[1]:.2f}, expected {expected_tj1:.2f}"
+    )
+
+    # Hottest GPU is last in series
+    assert rack.hottest_gpu_index == 1
+    assert abs(rack.max_junction_temp_c - rack.per_gpu_junction_temps_c[1]) < 0.01
+
+    # CDU outlet = supply + N × coolant_rise
+    expected_outlet = 25.0 + 2.0 * single.coolant_rise_c
+    assert abs(rack.cdu_outlet_temp_c - expected_outlet) < 0.01, (
+        f"CDU outlet={rack.cdu_outlet_temp_c:.3f}, expected {expected_outlet:.3f}"
+    )
+
+    # Total ΔP = 2 × single-plate ΔP
+    assert abs(rack.total_pressure_drop_pa - 2.0 * single.pressure_drop_pa) < 0.1, (
+        f"total_dp={rack.total_pressure_drop_pa:.1f}, expected {2 * single.pressure_drop_pa:.1f}"
+    )
+
+    # Bookkeeping
+    assert rack.total_heat_load_w == 1400.0
+    assert rack.gpu_count == 2
+
+
+def test_rack_parallel_two_gpu_hand_calc():
+    """Hand-calc: 2 GPUs in parallel, 700W each, 16 LPM total (8 LPM per GPU), 25°C supply.
+
+    In parallel with equal flow split:
+    - Each GPU receives total_flow / gpu_count = 8 LPM.
+    - All GPUs have identical inlet (CDU supply) and identical Tj.
+    - System ΔP = per-branch ΔP at 8 LPM (not doubled).
+    - CDU outlet from energy balance: Q_total / (m_dot_total × cp) + T_supply.
+
+    Hand calculation:
+      flow per GPU = 16 / 2 = 8 LPM  → identical to standalone case
+      Tj (each GPU) ≈ 70.9 °C
+      total_dp = dp at 8 LPM (same as single plate)
+      m_dot_total = (16/60/1000) × 997 = 0.26587 kg/s
+      CDU outlet = 25 + 1400 / (0.26587 × 4180) = 25 + 1.260 = 26.260 °C
+      Note: CDU outlet = supply + single coolant_rise (energy scales with total flow)
+    """
+    single = analyze(AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, coolant="water"))
+
+    rack = analyze_rack(AnalyzeRackInput(
+        gpu_count=2,
+        topology="parallel",
+        heat_load_per_gpu_w=700.0,
+        total_flow_lpm=16.0,  # 8 LPM per GPU
+        cdu_supply_temp_c=25.0,
+        coolant="water",
+    ))
+
+    # All GPUs identical in parallel
+    for i, tj in enumerate(rack.per_gpu_junction_temps_c):
+        assert abs(tj - single.junction_temp_c) < 0.01, (
+            f"GPU {i} Tj={tj:.2f}, expected {single.junction_temp_c:.2f}"
+        )
+
+    # System ΔP = per-branch ΔP (not cumulative)
+    assert abs(rack.total_pressure_drop_pa - single.pressure_drop_pa) < 0.1, (
+        f"total_dp={rack.total_pressure_drop_pa:.1f}, expected {single.pressure_drop_pa:.1f}"
+    )
+
+    # CDU outlet from energy balance
+    m_dot_total = (16.0 / 1000.0 / 60.0) * 997.0
+    expected_outlet = 25.0 + 1400.0 / (m_dot_total * 4180.0)
+    assert abs(rack.cdu_outlet_temp_c - expected_outlet) < 0.01, (
+        f"CDU outlet={rack.cdu_outlet_temp_c:.3f}, expected {expected_outlet:.3f}"
+    )
+
+    # CDU outlet = supply + 1 × single coolant_rise (energy balance simplification)
+    assert abs(rack.cdu_outlet_temp_c - (25.0 + single.coolant_rise_c)) < 0.01
+
+    assert rack.total_heat_load_w == 1400.0
+
+
+def test_rack_series_topology_invariants():
+    """In series: Tj increases monotonically, CDU outlet increases with GPU count."""
+    rack_4 = analyze_rack(AnalyzeRackInput(
+        gpu_count=4, topology="series", heat_load_per_gpu_w=700,
+        total_flow_lpm=8.0, cdu_supply_temp_c=25.0,
+    ))
+
+    # Tj monotonically increases along the chain
+    tjs = rack_4.per_gpu_junction_temps_c
+    for i in range(1, len(tjs)):
+        assert tjs[i] > tjs[i - 1], f"Tj not monotonic: GPU {i-1}={tjs[i-1]:.2f}, GPU {i}={tjs[i]:.2f}"
+
+    # Hottest GPU is always last
+    assert rack_4.hottest_gpu_index == 3
+
+    # Consecutive Tj differences are all equal (constant coolant_rise per GPU)
+    diffs = [tjs[i] - tjs[i - 1] for i in range(1, len(tjs))]
+    assert max(diffs) - min(diffs) < 0.001, f"Tj increments not uniform: {diffs}"
+
+
+def test_rack_parallel_vs_series_tradeoff():
+    """Parallel has lower Tj but higher pump power than series at same per-GPU flow."""
+    # Series: 8 LPM through all GPUs (8 LPM per GPU)
+    series = analyze_rack(AnalyzeRackInput(
+        gpu_count=4, topology="series", heat_load_per_gpu_w=700,
+        total_flow_lpm=8.0, cdu_supply_temp_c=25.0,
+    ))
+    # Parallel: 32 LPM total → 8 LPM per GPU (same per-GPU hydraulics)
+    parallel = analyze_rack(AnalyzeRackInput(
+        gpu_count=4, topology="parallel", heat_load_per_gpu_w=700,
+        total_flow_lpm=32.0, cdu_supply_temp_c=25.0,
+    ))
+
+    # Parallel max Tj < series max Tj (coolant temperature stacking eliminated)
+    assert parallel.max_junction_temp_c < series.max_junction_temp_c, (
+        f"Parallel Tj={parallel.max_junction_temp_c:.1f} should be < series Tj={series.max_junction_temp_c:.1f}"
+    )
+
+    # Series has higher total ΔP (4× vs 1× single plate)
+    assert series.total_pressure_drop_pa > parallel.total_pressure_drop_pa
+
+
+def test_rack_chilled_supply_defaults_ambient_to_cdu_supply():
+    """Low CDU supply temperatures should not fail when ambient is omitted."""
+    series = analyze_rack(AnalyzeRackInput(
+        gpu_count=2,
+        topology="series",
+        heat_load_per_gpu_w=700.0,
+        total_flow_lpm=8.0,
+        cdu_supply_temp_c=-10.0,
+        coolant="water",
+    ))
+    parallel = analyze_rack(AnalyzeRackInput(
+        gpu_count=2,
+        topology="parallel",
+        heat_load_per_gpu_w=700.0,
+        total_flow_lpm=16.0,
+        cdu_supply_temp_c=-10.0,
+        coolant="water",
+    ))
+
+    assert len(series.per_gpu_junction_temps_c) == 2
+    assert len(parallel.per_gpu_junction_temps_c) == 2
+    assert series.cdu_outlet_temp_c > -10.0
+    assert parallel.cdu_outlet_temp_c > -10.0
+
+
+def test_rack_explicit_ambient_passthrough():
+    """Rack ambient should be passed through to per-GPU cold plate inputs."""
+    rack = analyze_rack(AnalyzeRackInput(
+        gpu_count=2,
+        topology="parallel",
+        heat_load_per_gpu_w=700.0,
+        total_flow_lpm=16.0,
+        cdu_supply_temp_c=25.0,
+        ambient_temp_c=10.0,
+        coolant="water",
+    ))
+
+    assert len(rack.per_gpu_junction_temps_c) == 2
+    assert all(tj > 25.0 for tj in rack.per_gpu_junction_temps_c)

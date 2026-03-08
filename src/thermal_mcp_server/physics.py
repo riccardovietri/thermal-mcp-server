@@ -9,7 +9,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .schemas import AnalyzeColdplateInput, AnalyzeColdplateOutput, OptimizeFlowRateInput
+from .schemas import (
+    AnalyzeColdplateInput,
+    AnalyzeColdplateOutput,
+    AnalyzeRackInput,
+    AnalyzeRackOutput,
+    OptimizeFlowRateInput,
+)
 
 
 @dataclass(frozen=True)
@@ -113,6 +119,114 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
             "convection": r_conv,
             "total": r_total,
         },
+        warnings=warnings,
+    )
+
+
+def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
+    """Rack-level thermal analysis for N identical GPU cold plates.
+
+    Series topology: CDU supply flows through each cold plate in sequence.
+    Each GPU's inlet = previous GPU's outlet. Total ΔP = N × per-plate ΔP.
+    With constant fluid properties, Tj increases by exactly one coolant_rise
+    per GPU, so the last GPU is always the hottest.
+
+    Parallel topology: CDU supply splits equally across all cold plates.
+    All GPUs share the same inlet temperature. Total ΔP = per-plate ΔP at
+    flow_per_gpu = total_flow_lpm / gpu_count. CDU outlet temperature is
+    computed from an energy balance over the full rack.
+
+    Assumptions (documented in docs/physics.md Section G):
+    - Identical GPUs: same TDP, cold plate geometry, and thermal resistances.
+    - Uniform flow distribution: no maldistribution between parallel branches.
+    - No manifold or header pressure losses: cold plate ΔP only.
+    """
+    props = COOLANTS[inp.coolant]
+    flow_m3s = inp.total_flow_lpm / 1000.0 / 60.0
+    effective_ambient = inp.ambient_temp_c if inp.ambient_temp_c is not None else inp.cdu_supply_temp_c
+    per_gpu_warnings: list[str] = []
+
+    if inp.topology == "series":
+        flow_per_gpu_lpm = inp.total_flow_lpm
+        tj_list: list[float] = []
+        current_inlet = inp.cdu_supply_temp_c
+        dp_single: float = 0.0
+
+        for i in range(inp.gpu_count):
+            gpu_inp = AnalyzeColdplateInput(
+                heat_load_w=inp.heat_load_per_gpu_w,
+                flow_rate_lpm=flow_per_gpu_lpm,
+                inlet_temp_c=current_inlet,
+                ambient_temp_c=effective_ambient,
+                coolant=inp.coolant,
+                r_jc_k_per_w=inp.r_jc_k_per_w,
+                r_tim_k_per_w=inp.r_tim_k_per_w,
+                geometry=inp.geometry,
+            )
+            result = analyze(gpu_inp)
+            tj_list.append(result.junction_temp_c)
+            if i == 0:
+                # ΔP identical for all GPUs in series: same flow, same geometry,
+                # constant fluid properties (no temperature dependence).
+                dp_single = result.pressure_drop_pa
+            current_inlet += result.coolant_rise_c
+            for w in result.warnings:
+                per_gpu_warnings.append(f"GPU {i}: {w}")
+
+        # Total system ΔP: cold plates in series add ΔP directly.
+        total_dp = dp_single * inp.gpu_count
+        cdu_outlet_temp = current_inlet  # temperature after exiting last GPU
+
+    else:  # parallel
+        flow_per_gpu_lpm = inp.total_flow_lpm / inp.gpu_count
+        gpu_inp = AnalyzeColdplateInput(
+            heat_load_w=inp.heat_load_per_gpu_w,
+            flow_rate_lpm=flow_per_gpu_lpm,
+            inlet_temp_c=inp.cdu_supply_temp_c,
+            ambient_temp_c=effective_ambient,
+            coolant=inp.coolant,
+            r_jc_k_per_w=inp.r_jc_k_per_w,
+            r_tim_k_per_w=inp.r_tim_k_per_w,
+            geometry=inp.geometry,
+        )
+        result = analyze(gpu_inp)
+        tj_list = [result.junction_temp_c] * inp.gpu_count
+
+        # Parallel branches: system ΔP equals branch ΔP (not cumulative).
+        total_dp = result.pressure_drop_pa
+
+        # CDU outlet from energy balance: Q_total = m_dot_total × cp × ΔT_cdu
+        m_dot_total = flow_m3s * props.density_kg_m3
+        total_q = inp.heat_load_per_gpu_w * inp.gpu_count
+        cdu_outlet_temp = inp.cdu_supply_temp_c + total_q / (m_dot_total * props.cp_j_kgk)
+
+        # All GPUs are identical in parallel; report unique warnings once.
+        for w in result.warnings:
+            per_gpu_warnings.append(f"all GPUs: {w}")
+
+    # ASSUMPTION: 50% pump efficiency (same assumption as single cold plate model).
+    total_pump_power = total_dp * flow_m3s / 0.5
+
+    max_tj = max(tj_list)
+    hottest_idx = tj_list.index(max_tj)
+
+    warnings: list[str] = []
+    if max_tj > 85:
+        warnings.append(
+            f"GPU {hottest_idx} (0-indexed) junction temperature {max_tj:.1f}°C exceeds 85°C design ceiling"
+        )
+    warnings.extend(per_gpu_warnings)
+
+    return AnalyzeRackOutput(
+        topology=inp.topology,
+        gpu_count=inp.gpu_count,
+        total_heat_load_w=inp.heat_load_per_gpu_w * inp.gpu_count,
+        max_junction_temp_c=max_tj,
+        hottest_gpu_index=hottest_idx,
+        cdu_outlet_temp_c=cdu_outlet_temp,
+        total_pressure_drop_pa=total_dp,
+        total_pump_power_w=total_pump_power,
+        per_gpu_junction_temps_c=tj_list,
         warnings=warnings,
     )
 

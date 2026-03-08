@@ -33,12 +33,6 @@ Homepage = "https://github.com/riccardovietri/thermal-mcp-server"
 Source = "https://github.com/riccardovietri/thermal-mcp-server"
 "Bug Tracker" = "https://github.com/riccardovietri/thermal-mcp-server/issues"
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-cov>=4.1.0",
-]
-
 [tool.setuptools]
 package-dir = {"" = "src"}
 
@@ -47,3 +41,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=4.1.0",
+]

@@ -79,3 +79,92 @@ Potential future enhancements:
 4. Transient RC network for warm-up and control studies.
 5. Calibrated contact/TIM resistance distributions (not single deterministic value).
 6. Optional uncertainty propagation (Monte Carlo on key inputs).
+
+## G) Rack-level model
+
+`analyze_rack()` extends the single-plate model to N identical GPU cold plates
+plumbed in series or parallel. Added 2026-03-06.
+
+### Series topology
+
+CDU supply flows through each cold plate in sequence. The outlet of GPU `i`
+becomes the inlet of GPU `i+1`:
+
+```
+T_in[0] = T_cdu_supply
+T_in[i] = T_in[i-1] + coolant_rise[i-1]
+Tj[i]   = (T_in[i] + 0.5 × coolant_rise) + Q × R_total
+```
+
+Because fluid properties are constant (no temperature dependence), `coolant_rise`
+and `R_total` are the same for every GPU. Therefore:
+
+```
+Tj[i+1] - Tj[i] = coolant_rise   (exact)
+```
+
+The last GPU is always the hottest. Total pressure drop:
+
+```
+ΔP_total = N × ΔP_single
+```
+
+This is exact: all cold plates see the same flow and geometry, so each ΔP is
+identical. CDU outlet temperature:
+
+```
+T_cdu_out = T_cdu_supply + N × coolant_rise
+```
+
+### Parallel topology
+
+CDU supply splits equally across all cold plates. Flow per GPU:
+
+```
+Q_per_gpu = Q_total / N
+```
+
+All GPUs share the same inlet (CDU supply temperature) and are hydraulically
+identical. System pressure drop equals the branch pressure drop:
+
+```
+ΔP_total = ΔP_single(Q_per_gpu)
+```
+
+CDU outlet from an energy balance over the full rack:
+
+```
+T_cdu_out = T_cdu_supply + Q_rack_total / (m_dot_total × cp)
+```
+
+where `m_dot_total = (Q_total / 60000) × ρ`.
+
+### Pump power
+
+Same 50% efficiency assumption as the single-plate model:
+
+```
+P_pump = ΔP_total × (Q_total / 60000) / 0.50
+```
+
+### Assumptions and limitations
+
+- **Ambient reference handling:** `ambient_temp_c` is optional for rack inputs.
+  If omitted, rack analysis defaults ambient reference to `T_cdu_supply` when
+  constructing per-GPU cold plate analyses.
+- **Identical GPUs:** All cold plates have the same TDP, geometry, and thermal
+  resistances. Heterogeneous racks (mix of GPU types) are not supported.
+- **Uniform flow distribution:** No maldistribution between parallel branches.
+  Real manifolds can produce ±10–30% local flow variation.
+- **No manifold or header losses:** Only cold plate ΔP is modeled. Manifold
+  losses can be 20–50% of cold plate ΔP in a dense rack and are not included.
+- **Constant fluid properties:** Same limitation as single-plate model. Negligible
+  error at typical operating points; more significant at high inlet temperature.
+
+### Validation
+
+Two hand-calc tests in `tests/test_physics_behavior.py`:
+- `test_rack_series_two_gpu_hand_calc`: Verifies GPU 0 = standalone analysis,
+  GPU 1 = GPU 0 + coolant_rise, CDU outlet, and total ΔP for 2-GPU series case.
+- `test_rack_parallel_two_gpu_hand_calc`: Verifies all GPUs = standalone at
+  per-GPU flow, total ΔP = single-plate ΔP, CDU outlet from energy balance.

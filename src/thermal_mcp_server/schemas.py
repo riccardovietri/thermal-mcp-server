@@ -92,3 +92,54 @@ class OptimizeFlowRateInput(BaseModel):
         if self.flow_max_lpm <= self.flow_min_lpm:
             raise ValueError("flow_max_lpm must be greater than flow_min_lpm")
         return self
+
+
+RackTopology = Literal["series", "parallel"]
+
+
+class AnalyzeRackInput(BaseModel):
+    """Inputs for rack-level thermal analysis across N identical GPU cold plates.
+
+    Series topology: CDU supply flows through each cold plate in sequence.
+    Each GPU's inlet = previous GPU's outlet. Total ΔP = N × per-plate ΔP.
+
+    Parallel topology: CDU supply splits equally across all cold plates.
+    All GPUs share the same inlet temperature. Total ΔP = per-plate ΔP at
+    (total_flow_lpm / gpu_count) per branch.
+
+    Assumptions: identical GPUs, uniform flow distribution, no manifold losses.
+    See docs/physics.md Section G for full scope and limitations.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    gpu_count: int = Field(default=8, ge=1, le=256, description="Number of GPU cold plates in the rack")
+    topology: RackTopology = Field(default="series", description="Plumbing topology: series or parallel")
+    heat_load_per_gpu_w: float = Field(default=700.0, gt=0, description="Heat dissipation per GPU in watts")
+    total_flow_lpm: float = Field(default=64.0, gt=0, description="Total CDU coolant flow rate in L/min")
+    cdu_supply_temp_c: float = Field(default=25.0, ge=-20.0, le=80.0, description="CDU supply (rack inlet) temperature in °C")
+    ambient_temp_c: float | None = Field(
+        default=None,
+        ge=-40.0,
+        le=80.0,
+        description="Optional ambient reference temperature in °C. If omitted, defaults to cdu_supply_temp_c during rack analysis.",
+    )
+    coolant: CoolantName = "water"
+    r_jc_k_per_w: float = Field(default=0.04, ge=0, description="Junction-to-case thermal resistance per GPU in K/W")
+    r_tim_k_per_w: float = Field(default=0.02, ge=0, description="Thermal interface material resistance per GPU in K/W")
+    geometry: Geometry = Field(default_factory=Geometry, description="Cold plate geometry (same for all GPUs)")
+
+
+class AnalyzeRackOutput(BaseModel):
+    """Rack-level thermal and hydraulic analysis results."""
+
+    topology: RackTopology
+    gpu_count: int
+    total_heat_load_w: float
+    max_junction_temp_c: float
+    hottest_gpu_index: int  # 0-indexed; in series this is always gpu_count - 1
+    cdu_outlet_temp_c: float
+    total_pressure_drop_pa: float
+    total_pump_power_w: float
+    per_gpu_junction_temps_c: list[float]
+    warnings: list[str]

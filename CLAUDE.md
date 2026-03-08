@@ -1,6 +1,9 @@
 # CLAUDE.md — thermal-mcp-server
 
 Project context for Claude Code sessions. Read before making changes.
+For cross-agent context, read `AGENTS.md` first. For durable project decisions,
+read `docs/decisions.md`. For current branch/session continuity, read
+`docs/agent-notes.md`.
 
 ## What this is
 
@@ -16,8 +19,8 @@ physics.py          ← All math: 1D resistance network, Dittus-Boelter, Darcy-W
 mcp_server.py       ← FastMCP tool wrappers (thin — no physics here)
 ```
 
-Three MCP tools: `analyze_coldplate`, `compare_coolants`, `optimize_flow_rate`.
-One public Python API: `analyze()` and `optimize_flow()` in `physics.py`.
+Four MCP tools: `analyze_coldplate`, `compare_coolants`, `optimize_flow_rate`, `analyze_rack`.
+Public Python API: `analyze()`, `analyze_rack()`, and `optimize_flow()` in `physics.py`.
 
 ## Physics: what the model does and does not do
 
@@ -28,17 +31,20 @@ One public Python API: `analyze()` and `optimize_flow()` in `physics.py`.
 - Darcy-Weisbach ΔP with Blasius friction, same transition blend
 - Pump power = ΔP × Q / 0.50 (50% efficiency assumption, documented inline)
 - Binary-search flow optimization
+- Rack-level model: N identical GPUs in series or parallel topology
+  (see `docs/physics.md` Section G)
 
 **Does not (known limitations, do not paper over):**
-- No rack-level manifold model (series/parallel GPU plumbing, header ΔP)
+- No manifold/header pressure losses (rack model uses cold plate ΔP only)
+- No heterogeneous GPU racks (all GPUs assumed identical)
 - No transient thermal capacitance
 - No 2D spreading resistance
 - No temperature-dependent fluid properties
-- No flow maldistribution across channels
+- No flow maldistribution across channels or parallel branches
 - No boiling/two-phase
 
-These are documented in `docs/physics.md` section E. Do not add hacks to simulate
-them — add them properly or leave them out.
+These are documented in `docs/physics.md` sections E and G. Do not add hacks to
+simulate them — add them properly or leave them out.
 
 ## Physics change protocol
 
@@ -104,18 +110,20 @@ Do not change these without a current source citation.
 
 ## Known gaps (prioritized)
 
-See `docs/strategy.md` for full context. In order of portfolio impact:
+See `docs/strategy.md` for full context and `docs/agent-notes.md` for current
+status and implementation specs. In order of portfolio impact:
 
-1. **Rack-level model** — `analyze_rack()` for series/parallel multi-GPU manifold.
-   This is the most-asked question by real thermal engineers and the current model
-   cannot answer it. ~60 lines of physics on top of existing `analyze()`.
+1. ~~**Rack-level model**~~ — **DONE** (PR11). `analyze_rack()` supports series
+   and parallel topologies. Hand-calc validated. See `docs/physics.md` Section G.
 
-2. **Sensitivity / uncertainty output** — ∂Tj/∂Q, ∂Tj/∂R_tim, ∂Tj/∂T_inlet.
+2. **MCP test completeness** — error paths, `met_target: False` case,
+   geometry passthrough, `compare_coolants` depth check, `analyze_rack` smoke test.
+   ~20 min effort. Should be done before PR12.
+
+3. **Sensitivity / uncertainty output** — ∂Tj/∂Q, ∂Tj/∂R_tim, ∂Tj/∂T_inlet.
    Results currently look falsely precise. R_jc has ±20% mfg variation;
-   TIM resistance doubles over 2–3 years of operation.
-
-3. **MCP test completeness** — error paths, `met_target: False` case,
-   geometry passthrough, `compare_coolants` depth check.
+   TIM resistance doubles over 2–3 years of operation. Add `margin_c` to
+   `optimize_flow_rate`. See `docs/agent-notes.md` for implementation options.
 
 ## Ask vs. proceed
 
@@ -148,3 +156,17 @@ Before marking any physics change as done, verify:
 - Commit style: `fix:`, `feat:`, `docs:`, `examples:`, `test:`
 - Physics changes need hand-calc validation before merge (see above).
 - See `docs/strategy.md` for roadmap and the ROI calculator decision.
+- See `docs/agent-notes.md` for session-by-session work log, queued tasks,
+  implementation specs, and automation plans. Read it first in new sessions.
+
+## Memory model
+
+Use the repo memory layers deliberately:
+
+- `AGENTS.md` — short, tool-neutral project contract
+- `CLAUDE.md` — detailed project workflow and modeling rules
+- `docs/agent-notes.md` — current branch/session continuity
+- `docs/decisions.md` — durable decisions that should survive after merge
+
+If something matters beyond the current branch, promote it out of
+`docs/agent-notes.md` into `docs/decisions.md`.

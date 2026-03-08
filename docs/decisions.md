@@ -1,0 +1,68 @@
+# Decisions — thermal-mcp-server
+
+Durable project decisions that should survive across branches and sessions.
+Use this file for choices that future agents and contributors should not need to
+re-derive from old PRs or chat logs.
+
+## 2026-03-07 — Cross-agent memory is repo-first
+
+Project memory is split by scope:
+
+- Repo memory is the canonical shared layer: `AGENTS.md`, `CLAUDE.md`,
+  `docs/agent-notes.md`, and this file.
+- Local machine memory is for user-specific preferences and cross-project
+  habits, not as the source of truth for this repo.
+
+Rationale:
+
+- Remote/cloud agents cannot be assumed to have access to local home-directory
+  state.
+- Repo memory is reviewable, portable, and available to all agents working on
+  the project.
+
+## 2026-03-07 — `AGENTS.md` is the cross-agent entrypoint
+
+`AGENTS.md` is the tool-neutral starting point for any coding agent. `CLAUDE.md`
+remains the richer project workflow guide, but should not be the only durable
+memory surface.
+
+Rationale:
+
+- Some agents read `AGENTS.md` by default.
+- A short, neutral contract reduces duplicated instructions across tools.
+
+## 2026-03-06 — Rack model excludes manifold/header losses
+
+Rack analysis supports only identical GPUs in series or parallel using cold
+plate pressure drop. No manifold/header loss model is included.
+
+Rationale:
+
+- This keeps the model honest and interpretable.
+- Manifold losses should be modeled explicitly rather than approximated with
+  undocumented fudge factors.
+
+Implication:
+
+- Do not claim rack-level hydraulic results are full-system predictions when
+  manifold losses are material.
+
+## 2026-03-06 — Hand-calculation validation is mandatory for physics-default changes
+
+If default geometry, coolant constants, or correlation behavior changes, update
+the relevant hand-calculation validation in `tests/test_physics_behavior.py`.
+
+Rationale:
+
+- This repo is credibility-sensitive. Numerical drift without an explicit
+  independent validation path is unacceptable.
+
+## 2026-03-06 — Thin MCP layer, physics stays in Python API
+
+`mcp_server.py` should remain a validation and transport wrapper, not a second
+implementation of the model.
+
+Rationale:
+
+- Prevents duplicated physics logic.
+- Keeps MCP behavior aligned with the Python API and tests.
