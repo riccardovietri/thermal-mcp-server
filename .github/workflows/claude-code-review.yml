@@ -36,9 +36,20 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
+          prompt: |
+            Review this pull request. Read AGENTS.md and CLAUDE.md first for project context.
+
+            Check for:
+            1. Physics correctness — units consistent (K for resistance, °C for I/O),
+               dimensional analysis, energy balance closes within 1%
+            2. Test coverage — any physics or schema change must have a hand-calc
+               validation test in tests/test_physics_behavior.py
+            3. Tolerance integrity — numerical tolerances must not be relaxed (<1°C on Tj, <5 on Re)
+            4. MCP layer discipline — no physics logic in mcp_server.py
+            5. Known limitations — model limitations must be documented, not papered over
+            6. Docs — docs/physics.md updated if physics changed, docs/agent-notes.md
+               updated if this is a meaningful session change
+
+            Post specific, actionable comments on any line that has an issue.
+            If everything looks correct, say so clearly.
 

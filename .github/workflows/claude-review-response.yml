@@ -1,0 +1,52 @@
+name: Claude Review Response
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  respond:
+    # Only fire on reviews that have actual findings (not simple approvals with no body)
+    if: |
+      github.event.review.state != 'approved' ||
+      github.event.review.body != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Respond to review findings
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            A code review was just submitted on this PR by ${{ github.event.review.user.login }}.
+
+            Review state: ${{ github.event.review.state }}
+            Review body: ${{ github.event.review.body }}
+
+            Read AGENTS.md and CLAUDE.md for project context. Then:
+
+            1. Read the full diff of this PR to understand what changed.
+            2. For each finding in the review, assess whether it is correct.
+            3. If a finding identifies a real bug or violation of the physics
+               change protocol:
+               - Fix it directly in the code
+               - Run `uv run pytest -v` to verify the fix passes all tests
+               - Commit the fix with an appropriate prefix (fix:, docs:, test:)
+            4. If a finding is incorrect or does not apply, post a reply comment
+               explaining why with specific reference to CLAUDE.md or docs/physics.md.
+            5. After handling all findings, post a summary comment on the PR listing
+               what was fixed, what was disputed, and what tests were run.
+
+            Do not return until all findings are addressed and tests pass.
