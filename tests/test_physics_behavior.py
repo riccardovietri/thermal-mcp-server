@@ -1,7 +1,7 @@
 import pytest
 
-from thermal_mcp_server.physics import analyze, analyze_rack
-from thermal_mcp_server.schemas import AnalyzeColdplateInput, AnalyzeRackInput
+from thermal_mcp_server.physics import analyze, analyze_rack, compute_sensitivity, optimize_flow
+from thermal_mcp_server.schemas import AnalyzeColdplateInput, AnalyzeRackInput, OptimizeFlowRateInput
 
 
 def test_tj_monotonic_with_flow():
@@ -321,3 +321,125 @@ def test_rack_explicit_ambient_passthrough():
 
     assert len(rack.per_gpu_junction_temps_c) == 2
     assert all(tj > 25.0 for tj in rack.per_gpu_junction_temps_c)
+
+
+# ---------------------------------------------------------------------------
+# Sensitivity tests
+# ---------------------------------------------------------------------------
+
+def test_sensitivity_dtj_dq_hand_calc():
+    """∂Tj/∂Q must equal (0.5/(m_dot*cp) + R_total).
+
+    For 700W, 8 LPM water at default geometry:
+      Tj = T_inlet + 0.5*Q/(m_dot*cp) + Q * R_total
+      ∂Tj/∂Q = 0.5/(m_dot*cp) + R_total
+      m_dot = 8/60000 * 997 = 0.13293 kg/s
+      0.5/(m_dot*cp) = 0.5/(0.13293 * 4180) = 8.98e-4
+      R_total = (Tj - T_inlet) / Q - 0.5/(m_dot*cp)
+               = (70.9 - 25) / 700 - 8.98e-4 ≈ 0.0647
+      ∂Tj/∂Q ≈ 8.98e-4 + (Tj-T_inlet)/Q - 8.98e-4 = (Tj - T_inlet) / Q
+    Simpler: ∂Tj/∂Q = Tj_deviation / Q (since Tj is linear in Q here).
+    """
+    inp = AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8)
+    result = analyze(inp)
+    sens = compute_sensitivity(inp)
+
+    # Analytical: ∂Tj/∂Q = (Tj - T_inlet) / Q (since Tj linear in Q, fixed flow)
+    expected = (result.junction_temp_c - inp.inlet_temp_c) / inp.heat_load_w
+    assert abs(sens.dtj_dq_c_per_w - expected) < 1e-4, (
+        f"dtj_dq={sens.dtj_dq_c_per_w:.6f}, expected ≈{expected:.6f}"
+    )
+
+
+def test_sensitivity_dtj_dr_tim_equals_heat_load():
+    """∂Tj/∂R_tim must equal Q_heat (analytically exact: Tj = ... + Q*R_tim + ...)."""
+    for q in (400.0, 700.0, 1200.0):
+        inp = AnalyzeColdplateInput(heat_load_w=q, flow_rate_lpm=8)
+        sens = compute_sensitivity(inp)
+        assert abs(sens.dtj_dr_tim_c_per_kw - q) < 0.1, (
+            f"Q={q}: dtj_dr_tim={sens.dtj_dr_tim_c_per_kw:.2f}, expected {q}"
+        )
+
+
+def test_sensitivity_dtj_dt_inlet_is_one():
+    """∂Tj/∂T_inlet must be 1.0 (R_conv and coolant_rise do not depend on inlet temp)."""
+    inp = AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8)
+    sens = compute_sensitivity(inp)
+    assert abs(sens.dtj_dt_inlet_dimensionless - 1.0) < 1e-4, (
+        f"dtj_dt_inlet={sens.dtj_dt_inlet_dimensionless:.6f}, expected 1.0"
+    )
+
+
+def test_sensitivity_r_jc_uncertainty_hand_calc():
+    """R_jc ±20% → Tj uncertainty = ±(0.2 × R_jc × Q).
+
+    For R_jc=0.04 K/W, Q=700W: ±(0.008 × 700) = ±5.6°C.
+    """
+    inp = AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, r_jc_k_per_w=0.04)
+    sens = compute_sensitivity(inp)
+    expected_pm = 0.20 * 0.04 * 700  # = 5.6°C
+    assert abs(sens.r_jc_uncertainty_pm_c - expected_pm) < 0.01, (
+        f"r_jc_unc={sens.r_jc_uncertainty_pm_c:.3f}, expected {expected_pm:.3f}"
+    )
+
+
+def test_sensitivity_r_tim_aged_hand_calc():
+    """R_tim aging (doubling) → Tj rise = R_tim_original × Q.
+
+    For R_tim=0.02 K/W, Q=700W: rise = 0.02 × 700 = 14.0°C.
+    """
+    inp = AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, r_tim_k_per_w=0.02)
+    sens = compute_sensitivity(inp)
+    expected_delta = 0.02 * 700  # = 14.0°C (R_tim doubles → Q * R_tim_orig extra)
+    assert abs(sens.r_tim_aged_delta_c - expected_delta) < 0.01, (
+        f"r_tim_aged_delta={sens.r_tim_aged_delta_c:.3f}, expected {expected_delta:.3f}"
+    )
+
+
+def test_sensitivity_not_returned_by_default():
+    """analyze() should not include sensitivity unless explicitly requested."""
+    result = analyze(AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8))
+    assert result.sensitivity is None
+
+
+# ---------------------------------------------------------------------------
+# margin_c tests
+# ---------------------------------------------------------------------------
+
+def test_optimize_margin_c_increases_flow():
+    """Adding a margin must require higher flow (more conservative target)."""
+    inp_no_margin = OptimizeFlowRateInput(
+        heat_load_w=700, max_junction_temp_c=75, margin_c=0.0, coolant="water"
+    )
+    inp_margin = OptimizeFlowRateInput(
+        heat_load_w=700, max_junction_temp_c=75, margin_c=5.0, coolant="water"
+    )
+    flow_no_margin, result_no = optimize_flow(inp_no_margin)
+    flow_with_margin, result_with = optimize_flow(inp_margin)
+
+    assert flow_with_margin > flow_no_margin, (
+        f"With 5°C margin, flow ({flow_with_margin:.2f} LPM) should exceed "
+        f"no-margin flow ({flow_no_margin:.2f} LPM)"
+    )
+    # The margin result must satisfy effective_target = 75 - 5 = 70°C
+    if result_with is not None:
+        assert result_with.junction_temp_c <= 70.0 + 0.01
+
+
+def test_optimize_margin_c_zero_equals_no_margin():
+    """margin_c=0.0 (default) must give same result as no margin argument."""
+    inp_default = OptimizeFlowRateInput(heat_load_w=700, max_junction_temp_c=80)
+    inp_zero = OptimizeFlowRateInput(heat_load_w=700, max_junction_temp_c=80, margin_c=0.0)
+    flow_default, _ = optimize_flow(inp_default)
+    flow_zero, _ = optimize_flow(inp_zero)
+    assert abs(flow_default - flow_zero) < 1e-6
+
+
+def test_optimize_margin_c_infeasible():
+    """margin_c that makes the effective target unachievable returns met_target=False."""
+    # Effective target = 70 - 60 = 10°C, physically impossible with 25°C inlet
+    inp = OptimizeFlowRateInput(
+        heat_load_w=700, max_junction_temp_c=70, margin_c=60.0, coolant="water"
+    )
+    flow, result = optimize_flow(inp)
+    assert result is None

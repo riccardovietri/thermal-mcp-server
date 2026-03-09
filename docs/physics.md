@@ -168,3 +168,67 @@ Two hand-calc tests in `tests/test_physics_behavior.py`:
   GPU 1 = GPU 0 + coolant_rise, CDU outlet, and total ΔP for 2-GPU series case.
 - `test_rack_parallel_two_gpu_hand_calc`: Verifies all GPUs = standalone at
   per-GPU flow, total ΔP = single-plate ΔP, CDU outlet from energy balance.
+
+---
+
+## Section H: Sensitivity and Uncertainty Analysis
+
+### Motivation
+
+The 1D resistance model produces a single point estimate for `junction_temp_c`.
+This estimate looks more precise than it is:
+
+- **R_jc**: NVIDIA does not publish manufacturing tolerances. For FCBGA packages,
+  ±20% is typical. At 700W with R_jc=0.04 K/W, this yields ±5.6°C Tj uncertainty.
+- **R_tim**: TIM pump-out degradation under thermomechanical cycling doubles
+  R_tim over approximately 2–3 years of field service. At 700W, this adds
+  +14°C Tj above the nominal value.
+- **TDP creep**: GPU TDP has historically grown 5–10% over a product's lifetime
+  via firmware/driver updates. At 700W nominal with ∂Tj/∂Q ≈ 0.066 °C/W,
+  a 5% TDP increase (+35W) adds ~2.3°C.
+
+The `compute_sensitivity()` function quantifies these effects via finite
+difference and is exposed as `sensitivity=True` on the `analyze_coldplate` tool.
+
+### Finite-difference scheme
+
+All derivatives use forward differences with step sizes chosen to be small
+relative to operating ranges while avoiding floating-point cancellation:
+
+| Parameter | Step | Notes |
+|-----------|------|-------|
+| Q_heat    | max(1% × Q, 1 W) | Linear regime; forward diff exact |
+| R_tim     | max(1% × R_tim, 1e-4 K/W) | Linear regime; forward diff exact |
+| T_inlet   | 0.1°C | Forward diff; should return exactly 1.0 |
+| R_jc      | ±20% (centered) | Uncertainty bound, not derivative |
+| R_tim_aged | R_tim × 2.0 | Field degradation scenario |
+
+### Analytical verification
+
+Because the model is linear in Q, R_tim, and T_inlet at fixed flow:
+
+```
+Tj = T_inlet + 0.5 × Q/(m_dot × cp) + Q × R_total
+
+∂Tj/∂Q        = (Tj - T_inlet) / Q               [°C/W]
+∂Tj/∂R_tim    = Q                                  [°C per K/W]
+∂Tj/∂T_inlet  = 1.0                               [dimensionless, exact]
+```
+
+The finite-difference tests in `test_sensitivity_*` confirm numerical results
+match these analytical values to < 0.01°C tolerance.
+
+### margin_c in optimize_flow_rate
+
+The `margin_c` parameter shifts the optimizer's effective target:
+
+```
+effective_target = max_junction_temp_c - margin_c
+```
+
+Recommended margins:
+- **5°C**: Covers R_jc manufacturing variation alone (±5.6°C at 700W)
+- **10°C**: Covers R_jc variation + partial TIM degradation
+- **20°C**: Covers worst-case R_jc + full TIM pump-out (adds ~14°C at 700W)
+
+Setting `margin_c=0` (default) reproduces legacy behavior exactly.

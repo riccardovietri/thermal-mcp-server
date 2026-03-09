@@ -15,6 +15,7 @@ from .schemas import (
     AnalyzeRackInput,
     AnalyzeRackOutput,
     OptimizeFlowRateInput,
+    SensitivityOutput,
 )
 
 
@@ -120,6 +121,56 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
             "total": r_total,
         },
         warnings=warnings,
+    )
+
+
+def compute_sensitivity(inp: AnalyzeColdplateInput) -> SensitivityOutput:
+    """Finite-difference sensitivity of junction temperature to key parameters.
+
+    Perturbs one parameter at a time (all others fixed) and reports:
+    - Partial derivatives ∂Tj/∂parameter
+    - Engineering uncertainty bounds from known hardware variation
+
+    Step sizes chosen to be small relative to typical operating ranges while
+    avoiding floating-point cancellation errors. model_copy() is used without
+    re-validation so boundary values (e.g. inlet_temp_c near 80°C) can still
+    be perturbed safely. See docs/physics.md Section H for interpretation.
+    """
+    base_tj = analyze(inp).junction_temp_c
+
+    # ∂Tj/∂Q_heat — forward difference, 1% of current heat load (min 1 W)
+    dq = max(inp.heat_load_w * 0.01, 1.0)
+    tj_dq = analyze(inp.model_copy(update={"heat_load_w": inp.heat_load_w + dq})).junction_temp_c
+    dtj_dq = (tj_dq - base_tj) / dq
+
+    # ∂Tj/∂R_tim — forward difference, 1% of current R_tim (min 1e-4 K/W)
+    dr = max(inp.r_tim_k_per_w * 0.01, 1e-4)
+    tj_dr = analyze(inp.model_copy(update={"r_tim_k_per_w": inp.r_tim_k_per_w + dr})).junction_temp_c
+    dtj_dr_tim = (tj_dr - base_tj) / dr
+
+    # ∂Tj/∂T_inlet — forward difference, 0.1°C step
+    # R_conv and ΔP_conv are independent of T_inlet, so result should be ~1.0.
+    # Confirms the model shift is physically correct.
+    dt = 0.1
+    tj_dt = analyze(inp.model_copy(update={"inlet_temp_c": inp.inlet_temp_c + dt})).junction_temp_c
+    dtj_dt_inlet = (tj_dt - base_tj) / dt
+
+    # R_jc uncertainty: ±20% manufacturing spread → ±°C Tj swing
+    # (NVIDIA does not publish R_jc tolerances; ±20% is typical for FCBGA packages)
+    r_jc_hi = analyze(inp.model_copy(update={"r_jc_k_per_w": inp.r_jc_k_per_w * 1.2})).junction_temp_c
+    r_jc_lo = analyze(inp.model_copy(update={"r_jc_k_per_w": inp.r_jc_k_per_w * 0.8})).junction_temp_c
+    r_jc_uncertainty_pm = (r_jc_hi - r_jc_lo) / 2.0
+
+    # TIM degradation: R_tim doubles after 2–3 years of pump-out in field service
+    tj_aged = analyze(inp.model_copy(update={"r_tim_k_per_w": inp.r_tim_k_per_w * 2.0})).junction_temp_c
+    r_tim_aged_delta = tj_aged - base_tj
+
+    return SensitivityOutput(
+        dtj_dq_c_per_w=dtj_dq,
+        dtj_dr_tim_c_per_kw=dtj_dr_tim,
+        dtj_dt_inlet_dimensionless=dtj_dt_inlet,
+        r_jc_uncertainty_pm_c=r_jc_uncertainty_pm,
+        r_tim_aged_delta_c=r_tim_aged_delta,
     )
 
 
@@ -234,10 +285,15 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
 def optimize_flow(inp: OptimizeFlowRateInput, max_iter: int = 40) -> tuple[float, AnalyzeColdplateOutput | None]:
     """Binary search for minimum flow rate meeting the junction temperature target.
 
+    The effective ceiling is (max_junction_temp_c − margin_c). This lets callers
+    bake in a safety margin for R_jc manufacturing variation (+20% adds ~1–2°C)
+    and TIM degradation (doubling R_tim adds ~6–14°C depending on heat load).
+
     Returns (minimum_flow_lpm, analysis_at_minimum_flow). If no flow rate in
     [flow_min_lpm, flow_max_lpm] meets the target, returns (flow_max_lpm, None).
     """
     lo, hi = inp.flow_min_lpm, inp.flow_max_lpm
+    effective_target = inp.max_junction_temp_c - inp.margin_c
     best: AnalyzeColdplateOutput | None = None
     for _ in range(max_iter):
         mid = 0.5 * (lo + hi)
@@ -253,7 +309,7 @@ def optimize_flow(inp: OptimizeFlowRateInput, max_iter: int = 40) -> tuple[float
                 geometry=inp.geometry,
             )
         )
-        if result.junction_temp_c <= inp.max_junction_temp_c:
+        if result.junction_temp_c <= effective_target:
             hi = mid
             best = result
         else:
