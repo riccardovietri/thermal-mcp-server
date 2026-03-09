@@ -49,6 +49,36 @@ class AnalyzeColdplateInput(BaseModel):
         return self
 
 
+class SensitivityOutput(BaseModel):
+    """Finite-difference sensitivity coefficients and engineering uncertainty bounds.
+
+    All derivatives are computed by perturbing each parameter by a small amount
+    while holding everything else constant. See docs/physics.md Section H for
+    derivation and interpretation.
+
+    Useful for understanding which parameters dominate Tj uncertainty:
+    - R_jc has ±20% manufacturing variation (NVIDIA does not publish tolerances).
+    - R_tim typically doubles over 2–3 years of pump-out degradation.
+    - TDP creep (heat_load_w) of 5–10% is common over GPU product lifetime.
+    """
+
+    dtj_dq_c_per_w: float = Field(
+        description="∂Tj/∂Q_heat [°C/W] — junction temp rise per additional watt of chip heat"
+    )
+    dtj_dr_tim_c_per_kw: float = Field(
+        description="∂Tj/∂R_tim [°C per K/W] — junction temp rise per unit TIM resistance increase"
+    )
+    dtj_dt_inlet_dimensionless: float = Field(
+        description="∂Tj/∂T_inlet [°C/°C] — should be ~1.0; confirms inlet shifts Tj 1-for-1"
+    )
+    r_jc_uncertainty_pm_c: float = Field(
+        description="±°C Tj spread from ±20% R_jc manufacturing variation"
+    )
+    r_tim_aged_delta_c: float = Field(
+        description="Tj rise [°C] if R_tim doubles — models TIM pump-out degradation after 2–3 years"
+    )
+
+
 class AnalyzeColdplateOutput(BaseModel):
     """Stable output schema for tool consumers."""
 
@@ -63,6 +93,7 @@ class AnalyzeColdplateOutput(BaseModel):
     junction_temp_c: float
     resistances_k_per_w: dict[str, float]
     warnings: list[str]
+    sensitivity: SensitivityOutput | None = None
 
 
 class CompareCoolantsInput(BaseModel):
@@ -78,6 +109,15 @@ class CompareCoolantsInput(BaseModel):
 class OptimizeFlowRateInput(BaseModel):
     heat_load_w: float = Field(default=700.0, gt=0)
     max_junction_temp_c: float = Field(default=85.0, gt=0, lt=200)
+    margin_c: float = Field(
+        default=0.0,
+        ge=0.0,
+        description=(
+            "Safety margin [°C]. The optimizer targets (max_junction_temp_c − margin_c) "
+            "as the effective ceiling. Use ≥5°C to account for R_jc manufacturing variation "
+            "and TIM degradation."
+        ),
+    )
     inlet_temp_c: float = Field(default=25.0, ge=-20.0, le=80.0)
     ambient_temp_c: float = Field(default=25.0, ge=-40.0, le=80.0)  # Reserved for future facility-level models. Not used in current cold plate analysis.
     coolant: CoolantName = "water"
@@ -91,6 +131,8 @@ class OptimizeFlowRateInput(BaseModel):
     def flow_range_valid(self) -> "OptimizeFlowRateInput":
         if self.flow_max_lpm <= self.flow_min_lpm:
             raise ValueError("flow_max_lpm must be greater than flow_min_lpm")
+        if self.margin_c >= self.max_junction_temp_c:
+            raise ValueError("margin_c must be less than max_junction_temp_c")
         return self
 
 
