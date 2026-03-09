@@ -19,14 +19,21 @@ jobs:
 
       - name: Run benchmark examples
         run: |
-          echo "=== NVL72 Rack Analysis ==="
-          uv run python examples/nvl72_rack_analysis.py
-          echo ""
-          echo "=== Topology Tradeoffs ==="
-          uv run python examples/rack_topology_tradeoffs.py
-          echo ""
-          echo "=== AI Factory Cooling Budget ==="
-          uv run python examples/ai_factory_cooling_budget.py
+          # Run any extended examples that exist in the repo.
+          # Guards prevent failures when example files haven't been merged yet.
+          for script in \
+            examples/nvl72_rack_analysis.py \
+            examples/rack_topology_tradeoffs.py \
+            examples/ai_factory_cooling_budget.py \
+            examples/real_chip_benchmarks.py; do
+            if [ -f "$script" ]; then
+              echo "=== $script ==="
+              uv run python "$script"
+              echo ""
+            else
+              echo "=== $script (skipped — not present in this commit) ==="
+            fi
+          done
 
       - name: Post failure comment to main branch issue
         if: failure()

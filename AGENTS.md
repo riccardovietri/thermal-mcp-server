@@ -71,6 +71,21 @@ Put information in the right place:
 Do not use `docs/agent-notes.md` as the only place for important design choices.
 If a note will still matter after merge, promote it into `docs/decisions.md`.
 
+## Autonomy and self-verification
+
+Before starting any non-trivial task:
+- If requirements are ambiguous, ask clarifying questions before writing code.
+- State your plan and the acceptance criteria you will verify against.
+
+While working:
+- Run `uv run pytest -v` after every meaningful change.
+- If a test fails, fix it before continuing. Do not relax tolerances.
+- Surface design decisions rather than guessing.
+
+Before finishing:
+- All tests must pass.
+- State what changed, what was tested, what passed, and any follow-up needed.
+
 ## Current priorities
 
 Current likely next engineering tasks:
