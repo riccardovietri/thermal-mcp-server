@@ -9,7 +9,7 @@ jobs:
     # Only fire on reviews that have actual findings (not simple approvals with no body)
     if: |
       github.event.review.state != 'approved' ||
-      github.event.review.body != ''
+      (github.event.review.body != '' && github.event.review.body != null)
     runs-on: ubuntu-latest
     permissions:
       contents: write
