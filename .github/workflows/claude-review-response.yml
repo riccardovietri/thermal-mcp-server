@@ -25,6 +25,9 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
 
+      - name: Install dependencies
+        run: uv sync --group dev
+
       - name: Respond to review findings
         uses: anthropics/claude-code-action@v1
         with:
