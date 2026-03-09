@@ -81,7 +81,6 @@ def compare_coolants_impl(
 def optimize_flow_rate_impl(
     heat_load_w: float,
     max_junction_temp_c: float,
-    margin_c: float = 0.0,
     coolant: str = "water",
     inlet_temp_c: float = 25.0,
     ambient_temp_c: float = 25.0,
@@ -90,6 +89,7 @@ def optimize_flow_rate_impl(
     r_jc_k_per_w: float = 0.04,
     r_tim_k_per_w: float = 0.02,
     geometry: dict[str, Any] | None = None,
+    margin_c: float = 0.0,
 ) -> dict:
     try:
         payload = OptimizeFlowRateInput(
@@ -173,7 +173,6 @@ def compare_coolants(
 def optimize_flow_rate(
     heat_load_w: float,
     max_junction_temp_c: float,
-    margin_c: float = 0.0,
     coolant: str = "water",
     inlet_temp_c: float = 25.0,
     ambient_temp_c: float = 25.0,
@@ -182,6 +181,7 @@ def optimize_flow_rate(
     r_jc_k_per_w: float = 0.04,
     r_tim_k_per_w: float = 0.02,
     geometry: dict[str, Any] | None = None,
+    margin_c: float = 0.0,
 ):
     """Find the minimum coolant flow rate that keeps junction temperature at or below a target.
 
@@ -195,9 +195,9 @@ def optimize_flow_rate(
     and TIM degradation over 2-3 years of field service.
     """
     return optimize_flow_rate_impl(
-        heat_load_w, max_junction_temp_c, margin_c, coolant, inlet_temp_c,
+        heat_load_w, max_junction_temp_c, coolant, inlet_temp_c,
         ambient_temp_c, flow_min_lpm, flow_max_lpm,
-        r_jc_k_per_w, r_tim_k_per_w, geometry,
+        r_jc_k_per_w, r_tim_k_per_w, geometry, margin_c,
     )
 
 
