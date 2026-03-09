@@ -3,19 +3,22 @@
 Living document for AI coding agents. Updated each session. Summarizes work done,
 decisions made, and queued tasks so future agents can orient quickly.
 
-*Last updated: 2026-03-07*
+*Last updated: 2026-03-09*
 
 ---
 
 ## Current branch
 
-`claude/review-project-strategy-ODSRh`
+`claude/mcp-tests-and-ci-ODSRh` (PR10)
 
 ---
 
 ## Status
 
-PR11 (rack-level model) is **implemented, tested (14/14), reviewed, and pushed**.
+PR10 (MCP test completeness + daily regression CI) is **implemented (34/34 tests), ready to push**.
+Branch `claude/mcp-tests-and-ci-ODSRh` targets main.
+
+PR11 (rack-level model) is **merged**.
 Branch `claude/review-project-strategy-ODSRh` is ready for PR creation and merge.
 CLAUDE.md has been updated to reflect the new `analyze_rack` tool and revised gap list.
 
@@ -27,6 +30,34 @@ Repo memory now has a cross-agent structure:
 ---
 
 ## Work completed (this session)
+
+### PR10: MCP test completeness + daily regression CI
+
+Added comprehensive tests to `tests/test_mcp_tools.py` (3 → 21 tests, 34 total):
+
+**Error paths tested:**
+- `analyze_coldplate_impl(heat_load_w=-1)` → `{"error": [...]}`
+- Invalid coolant name → `{"error": [...]}`
+- Zero flow → `{"error": [...]}`
+- Invalid geometry extra key (extra="forbid") → `{"error": [...]}`
+- `compare_coolants_impl(heat_load_w=-1)` → `{"error": [...]}`
+- `optimize_flow_rate_impl(flow_min=10, flow_max=5)` → `{"error": [...]}`
+- `analyze_rack_impl(topology="diagonal")` → `{"error": [...]}`
+- `analyze_rack_impl(gpu_count=0)` → `{"error": [...]}`
+
+**Depth and behavior checks:**
+- `compare_coolants`: both coolant results have actual float fields (not just keys); glycol Tj > water Tj
+- `optimize_flow_rate`: feasible target → `met_target=True`, result ≤ target; infeasible (Tj=25°C) → `met_target=False, analysis=None`
+- `analyze_rack` parallel: all GPUs identical Tj
+- Geometry passthrough: `channel_count=20` produces different Re/Tj than default 40 channels
+
+**GitHub Actions:**
+- Added `.github/workflows/daily-regression.yml`
+  - Runs at 6 AM UTC daily and on `workflow_dispatch`
+  - Runs `test_physics_behavior.py` (hand-calc validation) + all 3 example scripts
+  - On failure: opens a GitHub issue with `regression` + `physics` labels and run URL
+
+---
 
 ### PR11: Rack-level model
 
@@ -54,18 +85,10 @@ per-cold-plate.
 
 ## Queue: next tasks (prioritized)
 
-### PR10 — MCP test completeness (easy, ~20 min)
+### PR10 — MCP test completeness ✓ DONE (this session)
 
-`tests/test_mcp_tools.py` currently only checks key presence. Needs:
-- [ ] Error path: `analyze_coldplate_impl(heat_load_w=-1)` → `{"error": [...]}`
-- [ ] `optimize_flow_rate_impl` with infeasible target → `met_target: False, analysis_at_minimum_flow: None`
-- [ ] `compare_coolants_impl` depth check: verify both `results.water` and `results.glycol50`
-      contain actual analysis fields (not just keys)
-- [ ] Geometry passthrough: pass non-default `geometry` dict, verify it propagates through MCP layer
-      (e.g., channel_count=20 → result has correct Re for 20-channel plate)
-- [ ] `analyze_rack` MCP smoke test (new tool added this session)
-
-No physics changes. No hand-calc updates needed. Safe to auto-merge if tests pass.
+All items completed. 21 MCP tests + 34 total passing. Branch: `claude/mcp-tests-and-ci-ODSRh`.
+Also added `.github/workflows/daily-regression.yml` (runs hand-calc + examples daily at 6 AM UTC).
 
 ### PR12 — Sensitivity / uncertainty output (medium, ~half day)
 
