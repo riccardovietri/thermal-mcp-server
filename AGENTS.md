@@ -88,10 +88,11 @@ Before finishing:
 
 ## Current priorities
 
-Current likely next engineering tasks:
+All three originally-prioritized gaps (rack model, MCP test completeness,
+sensitivity output) are done. Current likely next tasks:
 
-1. Improve MCP tool test completeness
-2. Add sensitivity / uncertainty output
+1. Cut PyPI 0.3.0 release (rack model + sensitivity not yet in a published version)
+2. PR benchmark diff in CI (post chip benchmark results on every PR)
 3. Keep rack-level model scope disciplined unless manifold losses are modeled properly
 
 Check `docs/agent-notes.md` for the up-to-date queue before starting work.

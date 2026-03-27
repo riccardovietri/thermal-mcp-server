@@ -63,8 +63,8 @@ Do not weaken this test.
 
 - `tests/test_physics_behavior.py` — behavioral + numerical. Has hand-calc tests.
   Keep numerical tolerances tight (< 1°C on Tj, < 5 on Re).
-- `tests/test_mcp_tools.py` — MCP layer smoke tests. Currently thin; known gap.
-  Error paths (ValidationError → `{"error": [...]}`) should be tested here.
+- `tests/test_mcp_tools.py` — MCP layer tests (error paths, geometry passthrough,
+  `met_target: False`, `analyze_rack` smoke tests, `compare_coolants` depth checks).
 
 Run with: `pytest` (or `pytest -v` for detail).
 
@@ -108,21 +108,25 @@ dict in `physics.py` with a cited source for property values.
 
 Do not change these without a current source citation.
 
-## Known gaps (prioritized)
+## Completed features (formerly "known gaps")
 
-See `docs/agent-notes.md` for current status and implementation specs. In order of portfolio impact:
+All three originally-prioritized gaps are now implemented and tested:
 
-1. ~~**Rack-level model**~~ — **DONE** (PR11). `analyze_rack()` supports series
+1. ~~**Rack-level model**~~ — **DONE** (PR13). `analyze_rack()` supports series
    and parallel topologies. Hand-calc validated. See `docs/physics.md` Section G.
 
-2. **MCP test completeness** — error paths, `met_target: False` case,
-   geometry passthrough, `compare_coolants` depth check, `analyze_rack` smoke test.
-   ~20 min effort. Should be done before PR12.
+2. ~~**MCP test completeness**~~ — **DONE** (PR14). Error paths, `met_target: False`,
+   geometry passthrough, `compare_coolants` depth check, `analyze_rack` smoke tests.
+   44 tests total.
 
-3. **Sensitivity / uncertainty output** — ∂Tj/∂Q, ∂Tj/∂R_tim, ∂Tj/∂T_inlet.
-   Results currently look falsely precise. R_jc has ±20% mfg variation;
-   TIM resistance doubles over 2–3 years of operation. Add `margin_c` to
-   `optimize_flow_rate`. See `docs/agent-notes.md` for implementation options.
+3. ~~**Sensitivity / uncertainty output**~~ — **DONE** (PR15). `compute_sensitivity()`
+   returns ∂Tj/∂Q, ∂Tj/∂R_tim, ∂Tj/∂T_inlet. `margin_c` parameter on
+   `optimize_flow_rate`. See `docs/physics.md` Section H.
+
+## Remaining known limitations
+
+See the "Does not" list under "Physics: what the model does and does not do" above.
+These are documented in `docs/physics.md` and the README.
 
 ## Ask vs. proceed
 
