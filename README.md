@@ -20,7 +20,43 @@
 
 ## Demo
 
-Single H100 SXM cold plate analysis — 700 W, water, 10 LPM, 35°C inlet:
+### Rack-level analysis — NVL72 CDU procurement spec
+
+The real engineering question is rack-scale. How much CDU flow do 72 B200 GPUs at 1200W each actually need?
+
+```python
+from thermal_mcp_server.physics import analyze_rack
+from thermal_mcp_server.schemas import AnalyzeRackInput
+
+result = analyze_rack(AnalyzeRackInput(
+    gpu_count=72,
+    topology="parallel",
+    heat_load_per_gpu_w=1200,
+    total_flow_lpm=1440,   # 20 LPM per GPU
+    cdu_supply_temp_c=25.0,
+    coolant="water",
+))
+```
+
+```json
+{
+  "topology": "parallel",
+  "gpu_count": 72,
+  "total_heat_load_w": 86400.0,
+  "max_junction_temp_c": 69.2,
+  "hottest_gpu_index": 0,
+  "cdu_outlet_temp_c": 25.9,
+  "total_pressure_drop_pa": 59400.0,
+  "total_pump_power_w": 2856.0,
+  "warnings": []
+}
+```
+
+**CDU spec from this result:** 1440 LPM flow, 86.4 kW heat rejection, 0.59 bar max cold plate ΔP, 25.9°C return temperature. This is the input a procurement team hands to Vertiv or CoolIT when specifying a CDU.
+
+See [`examples/nvl72_rack_analysis.py`](examples/nvl72_rack_analysis.py) for the full analysis including minimum flow sizing and inlet temperature sensitivity.
+
+### Single cold plate — H100 SXM
 
 ```python
 from thermal_mcp_server.physics import analyze
@@ -29,31 +65,8 @@ from thermal_mcp_server.schemas import AnalyzeColdplateInput
 result = analyze(AnalyzeColdplateInput(
     heat_load_w=700, flow_rate_lpm=10, inlet_temp_c=35.0, coolant="water"
 ))
+# junction_temp_c: 80.69 — 2.3°C margin below 83°C throttle point
 ```
-
-```json
-{
-  "coolant": "water",
-  "regime": "turbulent",
-  "reynolds": 4667.6,
-  "nusselt": 41.11,
-  "heat_transfer_coeff_w_m2k": 24667.2,
-  "pressure_drop_pa": 26503.0,
-  "pump_power_w": 8.83,
-  "coolant_rise_c": 1.01,
-  "junction_temp_c": 80.69,
-  "resistances_k_per_w": {
-    "junction_to_case": 0.04,
-    "tim": 0.02,
-    "base_conduction": 0.00052,
-    "convection": 0.00403,
-    "total": 0.06455
-  },
-  "warnings": []
-}
-```
-
-At 10 LPM water with 35°C inlet, the H100 runs at 80.7°C junction — 2.3°C of margin below the 83°C throttle point. This is a tight operating point at these inlet conditions; reducing inlet temperature to 25°C or increasing flow rate would add margin.
 
 
 ## How It Works

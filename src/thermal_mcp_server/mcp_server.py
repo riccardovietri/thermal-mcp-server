@@ -7,7 +7,7 @@ from typing import Any
 from fastmcp import FastMCP
 from pydantic import ValidationError
 
-from .physics import COOLANTS, analyze, analyze_rack, optimize_flow
+from .physics import COOLANTS, analyze, analyze_rack, compute_sensitivity, optimize_flow
 from .schemas import AnalyzeColdplateInput, AnalyzeRackInput, CompareCoolantsInput, Geometry, OptimizeFlowRateInput
 
 mcp = FastMCP("thermal-mcp-server")
@@ -26,6 +26,7 @@ def analyze_coldplate_impl(
     r_jc_k_per_w: float = 0.04,
     r_tim_k_per_w: float = 0.02,
     geometry: dict[str, Any] | None = None,
+    sensitivity: bool = False,
 ) -> dict:
     try:
         payload = AnalyzeColdplateInput(
@@ -40,7 +41,10 @@ def analyze_coldplate_impl(
         )
     except ValidationError as exc:
         return {"error": exc.errors()}
-    return analyze(payload).model_dump()
+    result = analyze(payload)
+    if sensitivity:
+        result = result.model_copy(update={"sensitivity": compute_sensitivity(payload)})
+    return result.model_dump()
 
 
 def compare_coolants_impl(
@@ -85,11 +89,13 @@ def optimize_flow_rate_impl(
     r_jc_k_per_w: float = 0.04,
     r_tim_k_per_w: float = 0.02,
     geometry: dict[str, Any] | None = None,
+    margin_c: float = 0.0,
 ) -> dict:
     try:
         payload = OptimizeFlowRateInput(
             heat_load_w=heat_load_w,
             max_junction_temp_c=max_junction_temp_c,
+            margin_c=margin_c,
             coolant=coolant,
             inlet_temp_c=inlet_temp_c,
             ambient_temp_c=ambient_temp_c,
@@ -105,6 +111,8 @@ def optimize_flow_rate_impl(
     flow_lpm, result = optimize_flow(payload)
     return {
         "target_max_junction_temp_c": payload.max_junction_temp_c,
+        "effective_target_c": payload.max_junction_temp_c - payload.margin_c,
+        "margin_c": payload.margin_c,
         "minimum_flow_rate_lpm": flow_lpm,
         "met_target": result is not None,
         "analysis_at_minimum_flow": result.model_dump() if result else None,
@@ -121,6 +129,7 @@ def analyze_coldplate(
     r_jc_k_per_w: float = 0.04,
     r_tim_k_per_w: float = 0.02,
     geometry: dict[str, Any] | None = None,
+    sensitivity: bool = False,
 ):
     """Calculate junction temperature, thermal resistances, and pressure drop for a liquid-cooled cold plate.
 
@@ -128,10 +137,14 @@ def analyze_coldplate(
     with Dittus-Boelter convection and Darcy-Weisbach pressure drop.
     Supports water and 50/50 glycol coolants. Returns warnings if junction temperature
     exceeds 85C or Reynolds number is dangerously low.
+
+    Set sensitivity=True to include finite-difference partial derivatives and
+    uncertainty bounds: ∂Tj/∂Q, ∂Tj/∂R_tim, ±20% R_jc manufacturing variation,
+    and Tj rise from TIM pump-out degradation (R_tim doubles after 2-3 years).
     """
     return analyze_coldplate_impl(
         heat_load_w, flow_rate_lpm, inlet_temp_c, ambient_temp_c,
-        coolant, r_jc_k_per_w, r_tim_k_per_w, geometry,
+        coolant, r_jc_k_per_w, r_tim_k_per_w, geometry, sensitivity,
     )
 
 
@@ -168,17 +181,23 @@ def optimize_flow_rate(
     r_jc_k_per_w: float = 0.04,
     r_tim_k_per_w: float = 0.02,
     geometry: dict[str, Any] | None = None,
+    margin_c: float = 0.0,
 ):
     """Find the minimum coolant flow rate that keeps junction temperature at or below a target.
 
     Uses binary search between flow_min_lpm and flow_max_lpm.
     Returns the minimum flow rate, whether the target was met,
     and the full thermal analysis at that operating point.
+
+    margin_c: Optional safety margin in °C. The optimizer targets
+    (max_junction_temp_c - margin_c) as the effective ceiling.
+    Recommended: ≥5°C to cover R_jc manufacturing variation (±20%)
+    and TIM degradation over 2-3 years of field service.
     """
     return optimize_flow_rate_impl(
         heat_load_w, max_junction_temp_c, coolant, inlet_temp_c,
         ambient_temp_c, flow_min_lpm, flow_max_lpm,
-        r_jc_k_per_w, r_tim_k_per_w, geometry,
+        r_jc_k_per_w, r_tim_k_per_w, geometry, margin_c,
     )
 
 
