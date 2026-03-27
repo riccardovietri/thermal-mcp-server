@@ -110,8 +110,7 @@ Do not change these without a current source citation.
 
 ## Known gaps (prioritized)
 
-See `docs/strategy.md` for full context and `docs/agent-notes.md` for current
-status and implementation specs. In order of portfolio impact:
+See `docs/agent-notes.md` for current status and implementation specs. In order of portfolio impact:
 
 1. ~~**Rack-level model**~~ — **DONE** (PR11). `analyze_rack()` supports series
    and parallel topologies. Hand-calc validated. See `docs/physics.md` Section G.
@@ -155,7 +154,7 @@ Before marking any physics change as done, verify:
 - Main branch is the stable baseline. PRs from `claude/` branches.
 - Commit style: `fix:`, `feat:`, `docs:`, `examples:`, `test:`
 - Physics changes need hand-calc validation before merge (see above).
-- See `docs/strategy.md` for roadmap and the ROI calculator decision.
+- See `docs/decisions.md` for roadmap decisions including the ROI calculator.
 - See `docs/agent-notes.md` for session-by-session work log, queued tasks,
   implementation specs, and automation plans. Read it first in new sessions.
 
