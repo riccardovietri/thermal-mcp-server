@@ -27,6 +27,11 @@ Repo memory now has a cross-agent structure:
 - `docs/decisions.md` added for durable architectural/modeling decisions
 - `docs/local-agent-bootstrap.md` added with a reusable prompt for local agent setup
 
+Interactive demo scaffold is now part of the repo plan:
+- `examples/interactive_rack_demo.ipynb` is the notebook surface
+- `examples/demo_helpers.py` is the stable presentation/adapter layer
+- future demo features should plug into helper extension seams rather than pushing logic into notebook cells
+
 ---
 
 ## Work completed (this session)
@@ -118,6 +123,22 @@ Needs numpy. Worth it if targeting senior thermal engineers or academic audience
 **Add `margin_c` to `optimize_flow_rate`:**
 Target `max_junction_temp_c - margin_c` instead of bare limit. Default 3°C.
 This makes optimization results deployable, not just theoretical.
+
+### Interactive notebook demo (medium, ~half day)
+
+Build a local-first notebook that demonstrates rack-level tradeoffs using the
+existing API surface:
+- hottest GPU temperature vs total rack flow
+- total pressure drop and pump power vs flow
+- per-GPU temperature distribution for series vs parallel
+- worked examples for H100 and B200
+
+Implementation guardrails:
+- keep notebook narrative technical and professional
+- put model-to-plot/table adapters in `examples/demo_helpers.py`
+- reserve extension seams there for sensitivity, margin-aware optimization,
+  manifold overlays, and temperature-dependent coolant properties
+- do not add placeholder outputs for features that do not exist yet
 
 ### ROI calculator — separate repo decision (open)
 
