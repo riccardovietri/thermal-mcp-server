@@ -29,6 +29,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+]
 demo = [
     "ipywidgets>=8.1.0",
     "jupyter>=1.1.0",
