@@ -68,6 +68,59 @@ result = analyze(AnalyzeColdplateInput(
 # junction_temp_c: 80.69 — 2.3°C margin below 83°C throttle point
 ```
 
+```json
+{
+  "coolant": "water",
+  "regime": "turbulent",
+  "reynolds": 4667.6,
+  "nusselt": 41.11,
+  "heat_transfer_coeff_w_m2k": 24667.2,
+  "pressure_drop_pa": 26503.0,
+  "pump_power_w": 8.83,
+  "coolant_rise_c": 1.01,
+  "junction_temp_c": 80.69,
+  "resistances_k_per_w": {
+    "junction_to_case": 0.04,
+    "tim": 0.02,
+    "base_conduction": 0.00052,
+    "convection": 0.00403,
+    "total": 0.06455
+  },
+  "warnings": []
+}
+```
+
+At 10 LPM water with 35°C inlet, the H100 runs at 80.7°C junction — 2.3°C of margin below the 83°C throttle point. This is a tight operating point at these inlet conditions; reducing inlet temperature to 25°C or increasing flow rate would add margin.
+
+## Interactive Demo
+
+The repository includes an interactive rack-level notebook for exploring
+topology, flow, and supply temperature tradeoffs with the current physics API.
+
+Install the optional demo dependencies:
+
+```bash
+pip install -e .[demo]
+```
+
+Launch the notebook locally from the repo root:
+
+```bash
+jupyter notebook examples/interactive_rack_demo.ipynb
+```
+
+The notebook is local-first and structured to remain compatible with a later
+Colab flow. It uses `examples/demo_helpers.py` as the presentation layer, so
+future additions such as sensitivity overlays or manifold-loss adjustments can
+plug in without rewriting the notebook.
+
+Quick smoke check without launching Jupyter:
+
+```bash
+python -c "from examples.demo_helpers import run_rack_case, sweep_rack_flows; print(run_rack_case('H100 SXM', 8, 'parallel', 64.0, 25.0)['result']['max_junction_temp_c']); print(len(sweep_rack_flows('H100 SXM', 8, 25.0)['parallel']))"
+```
+
+>>>>>>> Stashed changes
 
 ## How It Works
 
