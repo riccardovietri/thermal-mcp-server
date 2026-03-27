@@ -228,7 +228,13 @@ def analyze_rack_impl(
         )
     except ValidationError as exc:
         return {"error": exc.errors()}
-    return analyze_rack(payload).model_dump()
+    try:
+        return analyze_rack(payload).model_dump()
+    except ValidationError as exc:
+        # analyze_rack builds per-GPU AnalyzeColdplateInput objects internally;
+        # series mode can push a downstream GPU's inlet_temp_c above the schema
+        # limit (>80°C) even when the top-level AnalyzeRackInput is valid.
+        return {"error": exc.errors()}
 
 
 @mcp.tool(name="analyze_rack")

@@ -3,24 +3,36 @@
 Living document for AI coding agents. Updated each session. Summarizes work done,
 decisions made, and queued tasks so future agents can orient quickly.
 
-*Last updated: 2026-03-09*
+*Last updated: 2026-03-23*
 
 ---
 
 ## Current branch
 
-`claude/mcp-tests-and-ci-ODSRh` (PR10)
+`claude/review-project-strategy-ODSRh` — strategy session, README update, interactive notebook
 
 ---
 
 ## Status
 
-PR10 (MCP test completeness + daily regression CI) is **implemented (34/34 tests), ready to push**.
-Branch `claude/mcp-tests-and-ci-ODSRh` targets main.
+**Merged to main:**
+- PR13: Rack-level model (`analyze_rack`, series + parallel, hand-calc validated)
+- PR14: MCP test completeness (34 tests) + daily regression CI
 
-PR11 (rack-level model) is **merged**.
-Branch `claude/review-project-strategy-ODSRh` is ready for PR creation and merge.
-CLAUDE.md has been updated to reflect the new `analyze_rack` tool and revised gap list.
+**Open branches (all pushed, ready for PR creation):**
+
+| Branch | Content | Merge order |
+|--------|---------|-------------|
+| `claude/fix-regression-workflow-ODSRh` | Workflow fixes + auto-review-response + AGENTS.md self-verification | 1st |
+| `claude/portfolio-examples-ODSRh` | 3 example scripts + README rack-demo lead | 2nd |
+| `claude/sensitivity-and-margin-ODSRh` | Sensitivity output + `margin_c` for `optimize_flow_rate` | 3rd |
+
+**This session (2026-03-23):**
+- Strategy review: project is portfolio-presentable now; bottleneck is visibility, not features
+- Updated README to lead with NVL72 rack demo (also done in portfolio-examples branch)
+- Added `analyze_rack` to Tools section; updated Scope with known limitations
+- Created `examples/interactive_sizing.ipynb` — 6-section Colab-ready notebook
+- Identified personal site + notebook as highest ROI next steps
 
 Repo memory now has a cross-agent structure:
 - `AGENTS.md` added as the tool-neutral entrypoint
@@ -35,34 +47,6 @@ Interactive demo scaffold is now part of the repo plan:
 ---
 
 ## Work completed (this session)
-
-### PR10: MCP test completeness + daily regression CI
-
-Added comprehensive tests to `tests/test_mcp_tools.py` (3 → 21 tests, 34 total):
-
-**Error paths tested:**
-- `analyze_coldplate_impl(heat_load_w=-1)` → `{"error": [...]}`
-- Invalid coolant name → `{"error": [...]}`
-- Zero flow → `{"error": [...]}`
-- Invalid geometry extra key (extra="forbid") → `{"error": [...]}`
-- `compare_coolants_impl(heat_load_w=-1)` → `{"error": [...]}`
-- `optimize_flow_rate_impl(flow_min=10, flow_max=5)` → `{"error": [...]}`
-- `analyze_rack_impl(topology="diagonal")` → `{"error": [...]}`
-- `analyze_rack_impl(gpu_count=0)` → `{"error": [...]}`
-
-**Depth and behavior checks:**
-- `compare_coolants`: both coolant results have actual float fields (not just keys); glycol Tj > water Tj
-- `optimize_flow_rate`: feasible target → `met_target=True`, result ≤ target; infeasible (Tj=25°C) → `met_target=False, analysis=None`
-- `analyze_rack` parallel: all GPUs identical Tj
-- Geometry passthrough: `channel_count=20` produces different Re/Tj than default 40 channels
-
-**GitHub Actions:**
-- Added `.github/workflows/daily-regression.yml`
-  - Runs at 6 AM UTC daily and on `workflow_dispatch`
-  - Runs `test_physics_behavior.py` (hand-calc validation) + all 3 example scripts
-  - On failure: opens a GitHub issue with `regression` + `physics` labels and run URL
-
----
 
 ### PR11: Rack-level model
 
@@ -90,64 +74,54 @@ per-cold-plate.
 
 ## Queue: next tasks (prioritized)
 
-### PR10 — MCP test completeness ✓ DONE (this session)
+### 1. Merge open branches (ready now, in order)
 
-All items completed. 21 MCP tests + 34 total passing. Branch: `claude/mcp-tests-and-ci-ODSRh`.
-Also added `.github/workflows/daily-regression.yml` (runs hand-calc + examples daily at 6 AM UTC).
-
-### PR12 — Sensitivity / uncertainty output (medium, ~half day)
-
-Results currently look falsely precise. R_jc has ±20% manufacturing variation;
-TIM resistance doubles over 2–3 years. A real deployment engineer wants to know
-the worst case, not just the nominal.
-
-Options (pick one per discussion with Riccardo):
-
-**Option A — Sensitivity coefficients (simpler)**
-Add optional `sensitivity=True` param to `analyze()`. Returns additional dict:
-```python
-sensitivity: {
-    "dtj_dq":      float,  # °C/W  — impact of heat load uncertainty
-    "dtj_drtim":   float,  # °C/(K/W) — TIM aging impact
-    "dtj_dtinlet": float,  # °C/°C — inlet temperature impact (≈1.0 by construction)
-    "dtj_dflow":   float,  # °C/(L/min)
-}
 ```
-Computed via finite difference (±1% perturbation). Fast, no new dependencies.
+claude/fix-regression-workflow-ODSRh  →  PR first
+claude/portfolio-examples-ODSRh       →  PR second
+claude/sensitivity-and-margin-ODSRh   →  PR third
+```
 
-**Option B — Monte Carlo (more impressive, heavier)**
-Add `analyze_uncertainty(inp, n_samples=1000)` returning `(tj_mean, tj_p95, tj_p99)`.
-Samples R_jc ~ N(mean, 20%), R_tim ~ LogNormal (ages), flow ~ N(nominal, 5%).
-Needs numpy. Worth it if targeting senior thermal engineers or academic audience.
+All branches are pushed. No GITHUB_TOKEN available in current env — create PRs from browser:
+- https://github.com/riccardovietri/thermal-mcp-server/pull/new/claude/fix-regression-workflow-ODSRh
+- https://github.com/riccardovietri/thermal-mcp-server/pull/new/claude/portfolio-examples-ODSRh
+- https://github.com/riccardovietri/thermal-mcp-server/pull/new/claude/sensitivity-and-margin-ODSRh
 
-**Add `margin_c` to `optimize_flow_rate`:**
-Target `max_junction_temp_c - margin_c` instead of bare limit. Default 3°C.
-This makes optimization results deployable, not just theoretical.
+### 2. Personal site (highest visibility ROI, ~1–2 weeks)
 
-### Interactive notebook demo (medium, ~half day)
+Goal: make the project discoverable and give visitors a way to experience it.
 
-Build a local-first notebook that demonstrates rack-level tradeoffs using the
-existing API surface:
-- hottest GPU temperature vs total rack flow
-- total pressure drop and pump power vs flow
-- per-GPU temperature distribution for series vs parallel
-- worked examples for H100 and B200
+**Tech choice (recommended):** Astro + Tailwind, deployed on Netlify or Vercel.
+- One-page structure: bio / featured project / contact
+- Featured project: this tool, framed as a case study (problem → physics → tool → outcome)
+- Link to `examples/interactive_sizing.ipynb` as the interactive demo ("Open in Colab")
 
-Implementation guardrails:
-- keep notebook narrative technical and professional
-- put model-to-plot/table adapters in `examples/demo_helpers.py`
-- reserve extension seams there for sensitivity, margin-aware optimization,
-  manifold overlays, and temperature-dependent coolant properties
-- do not add placeholder outputs for features that do not exist yet
+**The narrative that works:**
+> "Liquid cooling is mandatory at B200 scale. I built an AI-native tool that lets engineers
+> and AI agents size CDUs from first principles — from single cold plate hydraulics to
+> full NVL72 rack specs. It works via Claude's MCP protocol."
 
-### ROI calculator — separate repo decision (open)
+### 3. Interactive notebook polishing (unblocks after PRs merge)
 
-See `docs/strategy.md` for full context.
-- `analyze_rack` (this session) is the prerequisite.
-- Financial layer belongs in a separate package (`thermal-roi-calculator`).
-- Only start after PR10 and PR12 are merged and the physics story is complete.
-- Key question: target user is engineer (CLI/Python) or business stakeholder (web)?
-  Answer determines whether to build a CLI tool or a web app.
+`examples/interactive_sizing.ipynb` is created and has the core sections. After portfolio-examples
+and sensitivity branches merge:
+- Add sensitivity section using the actual `sensitivity=True` param from PR12
+- Test full notebook run end-to-end in Colab (verify imports, output cells render)
+- Add "Open in Colab" badge to README once it's on main
+
+### 4. PR12 — Sensitivity / uncertainty output (ready to merge, in sensitivity branch)
+
+Already implemented on `claude/sensitivity-and-margin-ODSRh`:
+- `sensitivity=True` param for `analyze()` → finite-difference coefficients
+- `margin_c` param for `optimize_flow_rate` (default 3°C)
+
+### 5. ROI calculator — separate repo (after PRs 1–4 merged)
+
+See `docs/strategy.md` for full spec. Target user: VP of Infrastructure or CTO making a
+"should we buy the CDU?" decision.
+- Inputs: gpu_count, rack_count, electricity_$/kWh, baseline_PUE, liquid_PUE, CDU capex
+- Outputs: annual savings, payback months, NPV, per-GPU cooling tax
+- Separate repo (`thermal-roi-calculator`), depends on this package as a library
 
 ---
 

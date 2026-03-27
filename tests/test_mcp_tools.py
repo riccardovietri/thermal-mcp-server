@@ -211,6 +211,24 @@ def test_analyze_rack_error_gpu_count_out_of_range():
     assert "error" in out
 
 
+def test_analyze_rack_series_hot_inlet_returns_error():
+    """Series mode with high supply temp + low flow can push a downstream GPU's
+    inlet_temp_c above the 80°C schema limit even when the top-level input is valid.
+    Must return {"error": ...} not raise.
+
+    At 2 LPM / 700 W / water, ΔT ≈ 5°C per GPU. With supply=65°C, GPU 4's
+    inlet ≈ 80.1°C, which exceeds the inlet_temp_c ≤ 80 constraint.
+    """
+    out = mcp_server.analyze_rack_impl(
+        gpu_count=8,
+        topology="series",
+        heat_load_per_gpu_w=700,
+        total_flow_lpm=2.0,
+        cdu_supply_temp_c=65.0,  # 65 + 3×5°C rise = 80.1°C on GPU 4 inlet
+    )
+    assert "error" in out
+
+
 def test_analyze_rack_geometry_passthrough():
     """Non-default geometry propagates into rack analysis (different Re → different Tj)."""
     default_out = mcp_server.analyze_rack_impl(
