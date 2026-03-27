@@ -6,10 +6,13 @@ on:
 
 jobs:
   respond:
-    # Only fire on reviews that have actual findings (not simple approvals with no body)
+    # Only fire for repo members/owners submitting non-trivial reviews.
+    # Gating by author_association prevents untrusted or bot reviewers from
+    # triggering a write-capable automated job on the branch.
     if: |
-      github.event.review.state != 'approved' ||
-      (github.event.review.body != '' && github.event.review.body != null)
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.review.author_association) &&
+      (github.event.review.state != 'approved' ||
+      (github.event.review.body != '' && github.event.review.body != null))
     runs-on: ubuntu-latest
     permissions:
       contents: write
