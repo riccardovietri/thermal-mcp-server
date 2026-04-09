@@ -63,8 +63,9 @@ Do not weaken this test.
 
 - `tests/test_physics_behavior.py` — behavioral + numerical. Has hand-calc tests.
   Keep numerical tolerances tight (< 1°C on Tj, < 5 on Re).
-- `tests/test_mcp_tools.py` — MCP layer smoke tests. Currently thin; known gap.
-  Error paths (ValidationError → `{"error": [...]}`) should be tested here.
+- `tests/test_mcp_tools.py` — MCP layer contract tests: error paths, geometry
+  passthrough, infeasible optimization, rack smoke tests, and nested validation
+  failures should be covered here.
 
 Run with: `pytest` (or `pytest -v` for detail).
 
@@ -108,22 +109,26 @@ dict in `physics.py` with a cited source for property values.
 
 Do not change these without a current source citation.
 
-## Known gaps (prioritized)
+## Completed features
 
-See `docs/strategy.md` for full context and `docs/agent-notes.md` for current
-status and implementation specs. In order of portfolio impact:
+The original portfolio-priority gaps are now merged:
 
-1. ~~**Rack-level model**~~ — **DONE** (PR11). `analyze_rack()` supports series
-   and parallel topologies. Hand-calc validated. See `docs/physics.md` Section G.
+1. **Rack-level model** — `analyze_rack()` supports series and parallel
+   topologies. Hand-calc validated. See `docs/physics.md` Section G.
 
-2. **MCP test completeness** — error paths, `met_target: False` case,
-   geometry passthrough, `compare_coolants` depth check, `analyze_rack` smoke test.
-   ~20 min effort. Should be done before PR12.
+2. **MCP test completeness** — error paths, `met_target: False`,
+   geometry passthrough, `compare_coolants` depth checks, rack smoke tests,
+   and nested validation handling are covered in `tests/test_mcp_tools.py`.
 
-3. **Sensitivity / uncertainty output** — ∂Tj/∂Q, ∂Tj/∂R_tim, ∂Tj/∂T_inlet.
-   Results currently look falsely precise. R_jc has ±20% mfg variation;
-   TIM resistance doubles over 2–3 years of operation. Add `margin_c` to
-   `optimize_flow_rate`. See `docs/agent-notes.md` for implementation options.
+3. **Sensitivity / uncertainty output** — `compute_sensitivity()` provides
+   ∂Tj/∂Q, ∂Tj/∂R_tim, ∂Tj/∂T_inlet and uncertainty deltas. `margin_c`
+   is available on `optimize_flow_rate`.
+
+## Current next steps
+
+- PR benchmark diff or reviewer-facing benchmark reporting in CI
+- Interactive demo polish and Colab reliability
+- Keep model limitations explicit as public visibility increases
 
 ## Ask vs. proceed
 
@@ -155,7 +160,7 @@ Before marking any physics change as done, verify:
 - Main branch is the stable baseline. PRs from `claude/` branches.
 - Commit style: `fix:`, `feat:`, `docs:`, `examples:`, `test:`
 - Physics changes need hand-calc validation before merge (see above).
-- See `docs/strategy.md` for roadmap and the ROI calculator decision.
+- See `docs/decisions.md` for durable roadmap decisions such as the ROI calculator split.
 - See `docs/agent-notes.md` for session-by-session work log, queued tasks,
   implementation specs, and automation plans. Read it first in new sessions.
 
