@@ -132,7 +132,7 @@ These are documented explicitly because they bound what the model can and cannot
 git clone https://github.com/riccardovietri/thermal-mcp-server.git
 cd thermal-mcp-server
 uv sync --group dev
-uv run pytest -v  # 49 tests, all should pass
+uv run pytest -v  # all tests should pass
 ```
 
 ## Roadmap
