@@ -1,6 +1,6 @@
 # MCP Tool Contracts
 
-This server exports exactly three tools.
+This server exports four tools.
 
 ## 1) `analyze_coldplate`
 Purpose: single-point thermal + hydraulic analysis.
@@ -23,7 +23,7 @@ Output shape:
 ## 2) `compare_coolants`
 Purpose: compare water vs 50/50 glycol under identical load and geometry.
 
-Inputs: same as above except coolant omitted.
+Inputs: same as `analyze_coldplate` except coolant omitted.
 
 Output shape:
 - `inputs`
@@ -38,6 +38,7 @@ Inputs:
 - `max_junction_temp_c`
 - `coolant`
 - `flow_min_lpm`, `flow_max_lpm`
+- `margin_c` (default 0°C)
 - shared thermal/geometry params
 
 Output shape:
@@ -46,8 +47,30 @@ Output shape:
 - `met_target`
 - `analysis_at_minimum_flow`
 
+## 4) `analyze_rack`
+Purpose: rack-level model for N identical GPUs in series or parallel topology.
+
+Inputs:
+- `gpu_count` (int > 0)
+- `topology`: `"series" | "parallel"`
+- `heat_load_per_gpu_w` (float > 0)
+- `total_flow_lpm` (float > 0)
+- `cdu_supply_temp_c`
+- `coolant`: `"water" | "glycol50"`
+- `r_jc_k_per_w`, `r_tim_k_per_w`
+- `geometry` object
+
+Output shape:
+- `max_junction_temp_c`
+- `per_gpu_junction_temps_c` (list)
+- `total_flow_lpm`
+- `total_pressure_drop_pa`
+- `total_pump_power_w`
+- `cdu_outlet_temp_c`
+- `total_heat_load_w`
+
 ## How Claude uses this
-Claude asks clarifying questions (load, coolant, target temp), then calls one of the three tools and explains:
+Claude asks clarifying questions (load, coolant, target temp), then calls one of the four tools and explains:
 1. Junction temperature result
 2. Dominant resistance(s)
 3. Pump/pressure impact and trade-offs

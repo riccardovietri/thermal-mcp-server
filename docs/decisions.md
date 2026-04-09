@@ -8,8 +8,7 @@ re-derive from old PRs or chat logs.
 
 Project memory is split by scope:
 
-- Repo memory is the canonical shared layer: `AGENTS.md`, `CLAUDE.md`,
-  `docs/agent-notes.md`, and this file.
+- Repo memory is the canonical shared layer: `CLAUDE.md` and this file.
 - Local machine memory is for user-specific preferences and cross-project
   habits, not as the source of truth for this repo.
 
@@ -20,16 +19,15 @@ Rationale:
 - Repo memory is reviewable, portable, and available to all agents working on
   the project.
 
-## 2026-03-07 — `AGENTS.md` is the cross-agent entrypoint
+## 2026-04-08 — `CLAUDE.md` is the single agent instruction file
 
-`AGENTS.md` is the tool-neutral starting point for any coding agent. `CLAUDE.md`
-remains the richer project workflow guide, but should not be the only durable
-memory surface.
+`CLAUDE.md` serves all coding agents (Claude Code, Codex, etc.). `AGENTS.md`
+was removed — maintaining two overlapping instruction files caused drift.
 
 Rationale:
 
-- Some agents read `AGENTS.md` by default.
-- A short, neutral contract reduces duplicated instructions across tools.
+- One authoritative file is better than two that mostly agree.
+- Codex and other agents that read `CLAUDE.md` get the full context.
 
 ## 2026-03-06 — Rack model excludes manifold/header losses
 

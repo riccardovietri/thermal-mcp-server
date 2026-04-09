@@ -38,7 +38,7 @@ jobs:
             Review state: ${{ github.event.review.state }}
             Review body: ${{ github.event.review.body }}
 
-            Read AGENTS.md and CLAUDE.md for project context. Then:
+            Read CLAUDE.md for project context. Then:
 
             1. Read the full diff of this PR to understand what changed.
             2. For each finding in the review, assess whether it is correct.
