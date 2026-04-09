@@ -1,205 +1,139 @@
 # Agent Notes — thermal-mcp-server
 
-Living document for AI coding agents. Updated each session. Summarizes work done,
-decisions made, and queued tasks so future agents can orient quickly.
+Living document for AI coding agents. Updated as major repo state changes land.
+Use this file for current status and short-horizon next steps, not for durable
+decisions that should outlive the branch.
 
-*Last updated: 2026-03-23*
-
----
-
-## Current branch
-
-`claude/review-project-strategy-ODSRh` — strategy session, README update, interactive notebook
+*Last updated: 2026-04-08*
 
 ---
 
-## Status
+## Current state
 
-**Merged to main:**
-- PR13: Rack-level model (`analyze_rack`, series + parallel, hand-calc validated)
-- PR14: MCP test completeness (34 tests) + daily regression CI
+Main now includes the core portfolio milestones and release workflow fixes:
 
-**Open branches (all pushed, ready for PR creation):**
+| PR | Content |
+|----|---------|
+| PR13 | Rack-level model (`analyze_rack`, series + parallel, hand-calc validated) |
+| PR14 | MCP tool test expansion + daily regression CI |
+| PR15 | Sensitivity output + `margin_c` for `optimize_flow_rate` |
+| PR17 | Portfolio examples (`real_chip_benchmarks.py`, rack tradeoffs, AI factory budget) |
+| PR19 / PR20 | Workflow and review-response hardening |
+| PR23 / PR24 | PyPI publish workflow fixed (`uv build`, API-token publish path) |
 
-| Branch | Content | Merge order |
-|--------|---------|-------------|
-| `claude/fix-regression-workflow-ODSRh` | Workflow fixes + auto-review-response + AGENTS.md self-verification | 1st |
-| `claude/portfolio-examples-ODSRh` | 3 example scripts + README rack-demo lead | 2nd |
-| `claude/sensitivity-and-margin-ODSRh` | Sensitivity output + `margin_c` for `optimize_flow_rate` | 3rd |
+Current published package version: `0.3.0`.
 
-**This session (2026-03-23):**
-- Strategy review: project is portfolio-presentable now; bottleneck is visibility, not features
-- Updated README to lead with NVL72 rack demo (also done in portfolio-examples branch)
-- Added `analyze_rack` to Tools section; updated Scope with known limitations
-- Created `examples/interactive_sizing.ipynb` — 6-section Colab-ready notebook
-- Identified personal site + notebook as highest ROI next steps
-
-Repo memory now has a cross-agent structure:
-- `AGENTS.md` added as the tool-neutral entrypoint
-- `docs/decisions.md` added for durable architectural/modeling decisions
-- `docs/local-agent-bootstrap.md` added with a reusable prompt for local agent setup
-
-Interactive demo scaffold is now part of the repo plan:
-- `examples/interactive_rack_demo.ipynb` is the notebook surface
-- `examples/demo_helpers.py` is the stable presentation/adapter layer
-- future demo features should plug into helper extension seams rather than pushing logic into notebook cells
+Repo status at this update:
+- Public README leads with NVL72/B200 rack sizing and H100 baseline validation
+- `examples/interactive_sizing.ipynb` is the Colab-facing demo surface
+- Test suite has 44 passing tests across physics behavior and MCP wrappers
+- `uv build` succeeds for sdist and wheel
 
 ---
 
-## Work completed (this session)
+## Immediate next steps
 
-### PR11: Rack-level model
+### 1. PR benchmark diff in CI
 
-Added `analyze_rack()` — the highest-priority portfolio gap identified in
-`docs/strategy.md`. A thermal engineer's real question is rack-scale, not
-per-cold-plate.
+Highest-signal repo improvement still missing.
 
-**What was added:**
-- `AnalyzeRackInput` and `AnalyzeRackOutput` schemas in `schemas.py`
-- `analyze_rack()` function in `physics.py` (~65 lines)
-- `analyze_rack` MCP tool in `mcp_server.py`
-- Two hand-calc validation tests in `tests/test_physics_behavior.py`
-- Section G in `docs/physics.md`
+Goal:
+- Run `examples/real_chip_benchmarks.py` on pull requests
+- Surface output in CI logs or a PR comment so reviewers can see whether a
+  change moved real chip-level results
 
-**Physics summary:**
-- Series: each GPU's inlet = previous GPU's outlet. ΔP_total = N × ΔP_single.
-  In series with constant-property fluid, Tj increases by exactly `coolant_rise`
-  per GPU. Hottest GPU is always the last one.
-- Parallel: all GPUs share CDU supply temperature. Flow splits equally.
-  ΔP_total = ΔP_single (branch ΔP, not cumulative). CDU outlet from energy balance.
-- Assumed: uniform flow distribution, no manifold/header losses, identical GPUs.
-  These are documented in `docs/physics.md` Section G and as limitations.
+Why it matters:
+- Makes physics regressions legible in reviewer language, not just unit-test language
+- Creates a lightweight release note for every PR touching model behavior
 
----
+### 2. Interactive demo polish
 
-## Queue: next tasks (prioritized)
+Keep the notebook path polished and externally usable.
 
-### 1. Merge open branches (ready now, in order)
+Checklist:
+- Verify `examples/interactive_sizing.ipynb` runs end-to-end in Colab
+- Make sensitivity outputs visible in the notebook flow
+- Keep README and notebook screenshots aligned with current outputs
 
-```
-claude/fix-regression-workflow-ODSRh  →  PR first
-claude/portfolio-examples-ODSRh       →  PR second
-claude/sensitivity-and-margin-ODSRh   →  PR third
-```
+### 3. Personal site / case-study packaging
 
-All branches are pushed. No GITHUB_TOKEN available in current env — create PRs from browser:
-- https://github.com/riccardovietri/thermal-mcp-server/pull/new/claude/fix-regression-workflow-ODSRh
-- https://github.com/riccardovietri/thermal-mcp-server/pull/new/claude/portfolio-examples-ODSRh
-- https://github.com/riccardovietri/thermal-mcp-server/pull/new/claude/sensitivity-and-margin-ODSRh
+Highest ROI outside the repo itself.
 
-### 2. Personal site (highest visibility ROI, ~1–2 weeks)
+Narrative:
+> Liquid cooling is mandatory at B200 scale. This repo shows an AI-callable,
+> first-principles thermal model that sizes CDUs from single cold plates up to
+> rack-level specs.
 
-Goal: make the project discoverable and give visitors a way to experience it.
+Suggested packaging:
+- one-page project case study
+- links to PyPI, GitHub, and Colab demo
+- one short validation section with H100 default case and B200 rack example
 
-**Tech choice (recommended):** Astro + Tailwind, deployed on Netlify or Vercel.
-- One-page structure: bio / featured project / contact
-- Featured project: this tool, framed as a case study (problem → physics → tool → outcome)
-- Link to `examples/interactive_sizing.ipynb` as the interactive demo ("Open in Colab")
+### 4. Keep rack-scope discipline
 
-**The narrative that works:**
-> "Liquid cooling is mandatory at B200 scale. I built an AI-native tool that lets engineers
-> and AI agents size CDUs from first principles — from single cold plate hydraulics to
-> full NVL72 rack specs. It works via Claude's MCP protocol."
+Do not casually expand rack claims beyond current model scope.
 
-### 3. Interactive notebook polishing (unblocks after PRs merge)
+Still excluded:
+- manifold/header losses
+- heterogeneous racks
+- temperature-dependent fluid properties
+- flow maldistribution
 
-`examples/interactive_sizing.ipynb` is created and has the core sections. After portfolio-examples
-and sensitivity branches merge:
-- Add sensitivity section using the actual `sensitivity=True` param from PR12
-- Test full notebook run end-to-end in Colab (verify imports, output cells render)
-- Add "Open in Colab" badge to README once it's on main
-
-### 4. PR12 — Sensitivity / uncertainty output (ready to merge, in sensitivity branch)
-
-Already implemented on `claude/sensitivity-and-margin-ODSRh`:
-- `sensitivity=True` param for `analyze()` → finite-difference coefficients
-- `margin_c` param for `optimize_flow_rate` (default 3°C)
-
-### 5. ROI calculator — separate repo (after PRs 1–4 merged)
-
-See `docs/strategy.md` for full spec. Target user: VP of Infrastructure or CTO making a
-"should we buy the CDU?" decision.
-- Inputs: gpu_count, rack_count, electricity_$/kWh, baseline_PUE, liquid_PUE, CDU capex
-- Outputs: annual savings, payback months, NPV, per-GPU cooling tax
-- Separate repo (`thermal-roi-calculator`), depends on this package as a library
+Any expansion here should be deliberate, documented in `docs/physics.md`, and
+backed by hand-calc or analytical tests.
 
 ---
 
-## Automations to set up (GitHub Actions)
+## Review lessons worth reusing
 
-These can be wired up in `.github/workflows/` as time permits.
-All use the existing `claude.yml` / Claude Code GitHub Action pattern.
+Recent merged PRs surfaced recurring engineering lessons:
 
-### 1. Daily physics regression canary (HIGH value)
+1. Workflow failure-mode engineering matters.
+   Add file-existence guards, dependency bootstrap, null-event handling, and
+   deterministic failure messages to every GitHub Actions workflow.
 
-```yaml
-# .github/workflows/daily-regression.yml
-on:
-  schedule:
-    - cron: '0 6 * * *'  # 6 AM UTC daily
-```
+2. Permissions and secret contracts should be explicit per workflow trigger.
+   Review `pull_request`, `pull_request_review`, and comment-triggered workflows
+   for least-privilege permissions and clearly named required secrets.
 
-Runs `pytest tests/test_physics_behavior.py -v`. Posts a comment to main branch
-if the hand-calc tests drift (catches silent pydantic/fastmcp breaking changes).
-Failure notification via GitHub email → you notice before a demo breaks.
+3. Signature changes need compatibility checks.
+   For public Python APIs and MCP wrappers, check positional-call safety and
+   wrapper parity before merging argument-order changes.
 
-### 2. PR benchmark diff (MEDIUM value)
+4. MCP tools should preserve one error envelope.
+   Nested validation failures should return the same `{"error": [...]}` shape as
+   top-level validation failures.
 
-On every PR opened against main:
-- Run `python examples/real_chip_benchmarks.py`
-- Post the output as a PR comment
-- Shows what changed in real terms (H100 Tj, B200 flow requirement) not just test pass/fail
-- Forces every PR author to answer "did my change affect an H100?"
-
-Implementation: add a step to `ci.yml` that captures stdout and uses
-`gh pr comment` to post it.
-
-### 3. Weekly sensitivity report (LOW value, unblock after PR12)
-
-After PR12 lands: on Monday morning, run sensitivity sweep for all four chips
-(H100, B200, MI300X, Gaudi 3) and upload results as a workflow artifact. Lets you
-watch how sensitivity landscape changes as geometry or defaults evolve.
-
-### 4. Issue auto-answer for `physics-question` label (NICE TO HAVE)
-
-Repurpose `claude-code-review.yml` pattern: when an issue is labeled
-`physics-question`, Claude Code reads `docs/physics.md`, runs the relevant
-`analyze()` call if parameters are given, and drafts a reply comment.
-Useful for building a public-facing demo of the tool's conversational capability.
+5. New physics features should get analytical or hand-calc tests.
+   Every model extension should land with both docs and an independently
+   explainable validation path.
 
 ---
 
-## Decisions and rationale log
-
-| Date | Decision | Rationale |
-|------|----------|-----------|
-| 2026-03-07 | CLAUDE.md updated: rack model done, gaps re-prioritized | Future agents see current state immediately |
-| 2026-03-06 | Rack model before MCP tests (PR11 before PR10) | Highest portfolio impact; MCP tests are a quick follow-on |
-| 2026-03-06 | Series/parallel as Literal, not Enum | Consistent with existing `CoolantName` pattern in codebase |
-| 2026-03-06 | `per_gpu_junction_temps_c: list[float]` not full per-GPU results | Full results = N× data volume; Tj list is sufficient for rack-level decisions |
-| 2026-03-06 | No manifold losses in rack model | Explicitly documented as a limitation; add properly or not at all (per CLAUDE.md) |
-| 2026-03-06 | ROI calculator → separate repo | Different update cadence, different target user (CFO vs. engineer) |
-| 2026-03-05 | Strategy doc written (docs/strategy.md) | Audit of portfolio gaps; highest-impact items ranked |
-
----
-
-## Physics change protocol reminder
+## Physics change protocol
 
 Before marking any physics change done:
-1. Units consistent (resistance calcs in Kelvin, I/O in Celsius) ✓
-2. Dimensional analysis passes ✓
-3. Energy balance closes: `Q_input ≈ m_dot × cp × ΔT_coolant` ✓ (tested via CDU outlet check)
-4. `docs/physics.md` updated ✓
-5. Hand-calc test added ✓
-6. `pytest` passes ✓
+1. Units consistent (resistance calcs in Kelvin, I/O in Celsius)
+2. Dimensional analysis passes
+3. Energy balance closes: `Q_input ≈ m_dot × cp × ΔT_coolant`
+4. `docs/physics.md` updated with justification
+5. Hand-calc or analytical validation added in `tests/test_physics_behavior.py`
+6. `uv run pytest -v` passes with no tolerance relaxation
 
 ---
 
-## Files to not touch without hand-calc update
+## Files locked against casual change
 
-- `tests/test_physics_behavior.py` — do not weaken tolerance on hand-calc tests
-- `src/thermal_mcp_server/physics.py` constants (COOLANTS dict, efficiency = 0.50)
+- `tests/test_physics_behavior.py` — do not weaken numerical tolerances
+- `src/thermal_mcp_server/physics.py` constants (COOLANTS dict, pump efficiency = 0.50)
 - Key defaults in `schemas.py` (channel geometry, contact_area, copper_k)
 
-These are locked per `CLAUDE.md`. The canonical default case (700W, 8 LPM, water)
-→ Tj ≈ 70.9°C appears in README and must remain correct.
+Canonical default:
+- 700 W
+- 8 LPM
+- water
+- 25°C inlet
+- `Tj ≈ 70.9°C`
+
+This baseline appears in the README and is checked in
+`test_hand_calc_validation_default_case`.

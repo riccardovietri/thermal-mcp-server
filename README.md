@@ -1,6 +1,7 @@
 [![CI](https://github.com/riccardovietri/thermal-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/riccardovietri/thermal-mcp-server/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/thermal-mcp-server)](https://pypi.org/project/thermal-mcp-server/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/thermal-mcp-server)](https://pypi.org/project/thermal-mcp-server/)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/riccardovietri/thermal-mcp-server/blob/main/examples/interactive_sizing.ipynb)
 
 # thermal-mcp-server
 
@@ -173,9 +174,8 @@ Configure in your MCP client (`claude_desktop_config.json`):
 ```bash
 git clone https://github.com/riccardovietri/thermal-mcp-server.git
 cd thermal-mcp-server
-python -m venv venv && source venv/bin/activate
-pip install -e ".[dev]"
-pytest  # 34 tests, all should pass
+uv sync --group dev
+uv run pytest -v  # 44 tests, all should pass
 ```
 
 ## Usage with Claude
@@ -194,5 +194,6 @@ Claude calls the relevant tool, interprets the physics output, and answers in co
 
 ## Roadmap
 
-- **Sensitivity and uncertainty output** — `margin_c` parameter for `optimize_flow_rate` targets Tj_p95 rather than nominal. ∂Tj/∂Q, ∂Tj/∂R_tim, ∂Tj/∂T_inlet available via `compute_sensitivity`. See [`examples/interactive_sizing.ipynb`](examples/interactive_sizing.ipynb) for worked examples.
+- **Interactive demo polish** — expand [`examples/interactive_sizing.ipynb`](examples/interactive_sizing.ipynb), keep the Colab path working end-to-end, and surface sensitivity outputs more clearly in the walkthrough.
+- **PR benchmark diff in CI** — run `examples/real_chip_benchmarks.py` on pull requests and post the benchmark delta so reviewers see whether a change moved H100/B200-class outputs.
 - **ROI calculator** — financial layer: annual cooling cost delta between air and liquid, CDU payback period, per-GPU cooling tax as % of compute cost.

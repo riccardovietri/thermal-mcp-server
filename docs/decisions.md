@@ -66,3 +66,18 @@ Rationale:
 
 - Prevents duplicated physics logic.
 - Keeps MCP behavior aligned with the Python API and tests.
+
+## 2026-03-27 — ROI financial layer is a separate repo
+
+If a cooling-cost / ROI calculator is built, it should live in a separate
+package (`thermal-roi-calculator`) or a web app that imports
+`thermal_mcp_server.physics` as a dependency, not in this repo.
+
+Rationale:
+
+- ROI inputs such as electricity cost and CDU vendor pricing change on a
+  different cadence than the physics model.
+- Keeping the financial layer separate preserves narrow scope and fast tests in
+  this repo.
+- Deployment, cost-data refresh, and business-facing assumptions do not belong
+  in the core physics package.

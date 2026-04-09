@@ -88,10 +88,16 @@ Before finishing:
 
 ## Current priorities
 
+The original gaps called out during the portfolio push are now merged:
+
+1. Rack-level model
+2. MCP tool test completeness
+3. Sensitivity / uncertainty output
+
 Current likely next engineering tasks:
 
-1. Improve MCP tool test completeness
-2. Add sensitivity / uncertainty output
+1. Keep the release path healthy (`uv build`, publish workflow, installability)
+2. Add PR benchmark diff or equivalent reviewer-facing benchmark visibility
 3. Keep rack-level model scope disciplined unless manifold losses are modeled properly
 
 Check `docs/agent-notes.md` for the up-to-date queue before starting work.
