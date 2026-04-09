@@ -38,7 +38,7 @@ Inputs:
 - `max_junction_temp_c`
 - `coolant`
 - `flow_min_lpm`, `flow_max_lpm`
-- `margin_c` (default 3°C)
+- `margin_c` (default 0°C)
 - shared thermal/geometry params
 
 Output shape:
