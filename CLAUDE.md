@@ -1,8 +1,7 @@
 # CLAUDE.md — thermal-mcp-server
 
-Project context for Claude Code sessions. Read before making changes.
-For cross-agent context, read `AGENTS.md` first. For durable project decisions,
-read `docs/decisions.md`.
+Project context for all coding agents (Claude Code, Codex, etc.). Read before
+making changes. For durable project decisions, read `docs/decisions.md`.
 
 ## What this is
 
@@ -165,6 +164,5 @@ Before marking any physics change as done, verify:
 
 Use the repo memory layers deliberately:
 
-- `AGENTS.md` — short, tool-neutral project contract
-- `CLAUDE.md` — detailed project workflow and modeling rules
+- `CLAUDE.md` — project workflow, modeling rules, and agent instructions
 - `docs/decisions.md` — durable decisions that should survive after merge

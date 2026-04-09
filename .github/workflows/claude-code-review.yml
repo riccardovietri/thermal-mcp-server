@@ -37,7 +37,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Review this pull request. Read AGENTS.md and CLAUDE.md first for project context.
+            Review this pull request. Read CLAUDE.md first for project context.
 
             Check for:
             1. Physics correctness — units consistent (K for resistance, °C for I/O),
@@ -47,8 +47,7 @@ jobs:
             3. Tolerance integrity — numerical tolerances must not be relaxed (<1°C on Tj, <5 on Re)
             4. MCP layer discipline — no physics logic in mcp_server.py
             5. Known limitations — model limitations must be documented, not papered over
-            6. Docs — docs/physics.md updated if physics changed, docs/agent-notes.md
-               updated if this is a meaningful session change
+            6. Docs — docs/physics.md updated if physics changed
 
             Post specific, actionable comments on any line that has an issue.
             If everything looks correct, say so clearly.
