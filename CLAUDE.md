@@ -2,8 +2,7 @@
 
 Project context for Claude Code sessions. Read before making changes.
 For cross-agent context, read `AGENTS.md` first. For durable project decisions,
-read `docs/decisions.md`. For current branch/session continuity, read
-`docs/agent-notes.md`.
+read `docs/decisions.md`.
 
 ## What this is
 
@@ -161,8 +160,6 @@ Before marking any physics change as done, verify:
 - Commit style: `fix:`, `feat:`, `docs:`, `examples:`, `test:`
 - Physics changes need hand-calc validation before merge (see above).
 - See `docs/decisions.md` for durable roadmap decisions such as the ROI calculator split.
-- See `docs/agent-notes.md` for session-by-session work log, queued tasks,
-  implementation specs, and automation plans. Read it first in new sessions.
 
 ## Memory model
 
@@ -170,8 +167,4 @@ Use the repo memory layers deliberately:
 
 - `AGENTS.md` — short, tool-neutral project contract
 - `CLAUDE.md` — detailed project workflow and modeling rules
-- `docs/agent-notes.md` — current branch/session continuity
 - `docs/decisions.md` — durable decisions that should survive after merge
-
-If something matters beyond the current branch, promote it out of
-`docs/agent-notes.md` into `docs/decisions.md`.

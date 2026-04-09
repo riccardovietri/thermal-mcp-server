@@ -2,7 +2,7 @@
 
 Cross-agent project memory for Codex, Claude Code, and other coding agents.
 Read this file first. Use it as the tool-neutral contract. For deeper project
-detail, then read `CLAUDE.md` and `docs/agent-notes.md`.
+detail, then read `CLAUDE.md`. For durable design decisions, read `docs/decisions.md`.
 
 ## Purpose
 
@@ -19,9 +19,8 @@ Use the memory layers in this order:
 
 1. `AGENTS.md` — stable, cross-agent operating contract
 2. `CLAUDE.md` — project-specific workflow and detailed modeling guidance
-3. `docs/agent-notes.md` — current branch state, recent work, queued tasks
-4. `docs/decisions.md` — durable architectural and modeling decisions
-5. Code and tests — final authority on actual implementation
+3. `docs/decisions.md` — durable architectural and modeling decisions
+4. Code and tests — final authority on actual implementation
 
 Do not rely on chat/session memory for anything that should survive across
 agents or across days. If it matters later, write it into one of the files
@@ -65,11 +64,7 @@ Put information in the right place:
 
 - `AGENTS.md`: stable instructions all agents should follow
 - `CLAUDE.md`: richer workflow notes, guardrails, review protocol
-- `docs/agent-notes.md`: current progress, next tasks, temporary branch context
-- `docs/decisions.md`: decisions worth preserving after the current branch dies
-
-Do not use `docs/agent-notes.md` as the only place for important design choices.
-If a note will still matter after merge, promote it into `docs/decisions.md`.
+- `docs/decisions.md`: durable decisions that should survive after the current branch dies
 
 ## Autonomy and self-verification
 
@@ -100,4 +95,4 @@ Current likely next engineering tasks:
 2. Add PR benchmark diff or equivalent reviewer-facing benchmark visibility
 3. Keep rack-level model scope disciplined unless manifold losses are modeled properly
 
-Check `docs/agent-notes.md` for the up-to-date queue before starting work.
+Check `docs/decisions.md` for durable context before starting work.
