@@ -56,8 +56,14 @@ jobs:
             - [SUGGESTION] — style, minor improvement, or optional enhancement. No action required.
 
             Post findings as inline comments on the relevant lines.
-            End with a top-level review comment that:
-            - Lists all [BLOCKING] findings (or states "No blocking findings.")
-            - Lists all [SUGGESTION] findings (or states "No suggestions.")
-            - States whether the PR is ready to merge pending triage.
+            End with a top-level comment that begins with the exact text:
+            <!-- claude-review-findings -->
+
+            Then lists:
+            - All [BLOCKING] findings (or "No blocking findings.")
+            - All [SUGGESTION] findings (or "No suggestions.")
+            - Whether the PR is ready to merge pending triage.
+
+            The marker <!-- claude-review-findings --> is required — it is used to trigger
+            the automated fix agent. Do not omit it.
 

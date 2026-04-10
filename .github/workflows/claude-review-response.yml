@@ -6,13 +6,17 @@ on:
 
 jobs:
   respond:
-    # Fire when github-actions[bot] posts a summary comment on a PR containing [BLOCKING].
+    # Fire when the Claude review agent posts its findings summary on a PR.
     # claude-code-action uses issues.createComment (not a formal review object), so we
     # listen on issue_comment, not pull_request_review.
+    #
+    # We use a unique marker <!-- claude-review-findings --> rather than [BLOCKING] to
+    # avoid self-triggering: the fix agent's own summary comment could otherwise contain
+    # [BLOCKING] and loop indefinitely.
     if: |
       github.event.issue.pull_request != null &&
       github.event.comment.user.login == 'github-actions[bot]' &&
-      contains(github.event.comment.body, '[BLOCKING]')
+      contains(github.event.comment.body, '<!-- claude-review-findings -->')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -21,9 +25,22 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout repository
+      # issue_comment context runs against the default branch, not the PR branch.
+      # Explicitly check out the PR head so the fix agent edits the right code.
+      - name: Get PR head ref
+        id: pr
+        run: |
+          head_ref=$(gh pr view ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --json headRefName -q .headRefName)
+          echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ steps.pr.outputs.head_ref }}
           fetch-depth: 1
 
       - uses: astral-sh/setup-uv@v4
@@ -36,7 +53,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            The Claude code review just posted its summary on this PR. Your role is the fix agent.
+            The Claude code review just posted its findings summary on this PR. Your role is the fix agent.
 
             Summary comment:
             ${{ github.event.comment.body }}
@@ -65,3 +82,5 @@ jobs:
             - Each [SUGGESTION]: "applied" or "deferred"
             - Tests run and pass/fail status
             - Whether any findings remain unresolved (require human decision)
+
+            Do NOT include the text "<!-- claude-review-findings -->" anywhere in your comment.
