@@ -37,7 +37,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            Review this pull request. Read CLAUDE.md first for project context.
+            Review this pull request. Read CLAUDE.md and docs/review-policy.md first for project context and review standards.
 
             Check for:
             1. Physics correctness — units consistent (K for resistance, °C for I/O),
@@ -48,7 +48,16 @@ jobs:
             4. MCP layer discipline — no physics logic in mcp_server.py
             5. Known limitations — model limitations must be documented, not papered over
             6. Docs — docs/physics.md updated if physics changed
+            7. API compatibility — no schema renames or removals without a migration path
+            8. Regressions — spot-check that existing behavior is preserved
 
-            Post specific, actionable comments on any line that has an issue.
-            If everything looks correct, say so clearly.
+            Label every finding with its severity:
+            - [BLOCKING] — correctness bug, regression, broken test, or release risk. Must be fixed or explicitly waived before merge.
+            - [SUGGESTION] — style, minor improvement, or optional enhancement. No action required.
+
+            Post findings as inline comments on the relevant lines.
+            End with a top-level review comment that:
+            - Lists all [BLOCKING] findings (or states "No blocking findings.")
+            - Lists all [SUGGESTION] findings (or states "No suggestions.")
+            - States whether the PR is ready to merge pending triage.
 

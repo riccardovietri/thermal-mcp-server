@@ -1,15 +1,18 @@
 name: Claude Review Response
 
 on:
-  pull_request_review:
-    types: [submitted]
+  issue_comment:
+    types: [created]
 
 jobs:
   respond:
-    # Only fire on reviews that have actual findings (not simple approvals with no body)
+    # Fire when github-actions[bot] posts a summary comment on a PR containing [BLOCKING].
+    # claude-code-action uses issues.createComment (not a formal review object), so we
+    # listen on issue_comment, not pull_request_review.
     if: |
-      github.event.review.state != 'approved' ||
-      (github.event.review.body != '' && github.event.review.body != null)
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.login == 'github-actions[bot]' &&
+      contains(github.event.comment.body, '[BLOCKING]')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -33,23 +36,32 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            A code review was just submitted on this PR by ${{ github.event.review.user.login }}.
+            The Claude code review just posted its summary on this PR. Your role is the fix agent.
 
-            Review state: ${{ github.event.review.state }}
-            Review body: ${{ github.event.review.body }}
+            Summary comment:
+            ${{ github.event.comment.body }}
 
-            Read CLAUDE.md for project context. Then:
+            Read CLAUDE.md and docs/review-policy.md for project context and severity rules.
 
-            1. Read the full diff of this PR to understand what changed.
-            2. For each finding in the review, assess whether it is correct.
-            3. If a finding identifies a real bug or violation of the physics
-               change protocol:
-               - Fix it directly in the code
-               - Run `uv run pytest -v` to verify the fix passes all tests
-               - Commit the fix with an appropriate prefix (fix:, docs:, test:)
-            4. If a finding is incorrect or does not apply, post a reply comment
-               explaining why with specific reference to CLAUDE.md or docs/physics.md.
-            5. After handling all findings, post a summary comment on the PR listing
-               what was fixed, what was disputed, and what tests were run.
+            Then gather the full review context:
+            1. Read the full diff of this PR.
+            2. Fetch all inline review comments on this PR using:
+               gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/comments
+               These contain the per-line [BLOCKING] and [SUGGESTION] findings — do not skip this step.
 
-            Do not return until all findings are addressed and tests pass.
+            For each [BLOCKING] finding (from both the summary and inline comments):
+            1. Assess whether it is a real issue (cross-reference CLAUDE.md, docs/physics.md).
+            2. If real: fix it directly in the code, run `uv run pytest -v`, commit with
+               an appropriate prefix (fix:, docs:, test:). Do not return until tests pass.
+            3. If not applicable: post a reply comment citing the specific rule or
+               doc section that explains why.
+
+            For each [SUGGESTION] finding: no action required unless obviously correct
+            and trivially safe. Do not apply suggestions that touch physics, defaults,
+            or tests without explicit author approval.
+
+            After handling all findings, post a single summary comment on the PR with:
+            - Each [BLOCKING] finding: "fixed" (commit ref) or "disputed" (reason)
+            - Each [SUGGESTION]: "applied" or "deferred"
+            - Tests run and pass/fail status
+            - Whether any findings remain unresolved (require human decision)
