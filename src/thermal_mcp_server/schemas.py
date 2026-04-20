@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -185,3 +186,109 @@ class AnalyzeRackOutput(BaseModel):
     total_pump_power_w: float
     per_gpu_junction_temps_c: list[float]
     warnings: list[str]
+
+
+# ---------------------------------------------------------------------------
+# Decision report schemas
+# ---------------------------------------------------------------------------
+
+
+class RiskLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class FlowBand(BaseModel):
+    """Recommended coolant flow operating band for a given scenario."""
+
+    min_lpm: float = Field(description="Minimum flow that meets the thermal target with margin")
+    recommended_lpm: float = Field(description="Recommended operating point (15% above minimum)")
+    max_lpm: float = Field(description="Upper bound used in search (50% above minimum)")
+    basis: str = Field(description="Human-readable explanation of how the band was derived")
+
+
+class DecisionScenario(BaseModel):
+    """Input for a first-pass cooling decision report.
+
+    Describes a single GPU or rack scenario to be analyzed and synthesized into
+    an engineering recommendation memo. Physics parameters default to H100 SXM
+    reference values; override as needed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    chip_label: str = Field(
+        default="GPU",
+        description="Display label for the chip/scenario (e.g. 'H100 SXM'). Not validated against any database.",
+    )
+    heat_load_w: float = Field(default=700.0, gt=0, description="Chip thermal design power in watts")
+    gpu_count: int = Field(default=1, ge=1, le=256, description="Number of GPUs in the rack (1 = single cold plate)")
+    topology: RackTopology = Field(
+        default="parallel",
+        description="Rack plumbing topology (only used when gpu_count > 1)",
+    )
+    target_junction_temp_c: float = Field(
+        default=83.0,
+        gt=0,
+        lt=200,
+        description="Maximum allowable junction temperature in °C",
+    )
+    margin_c: float = Field(
+        default=5.0,
+        ge=0.0,
+        description=(
+            "Safety margin in °C. Optimizer targets (target_junction_temp_c - margin_c). "
+            "Recommended ≥5°C to cover R_jc manufacturing variation and TIM aging."
+        ),
+    )
+    coolant: CoolantName = "water"
+    inlet_temp_c: float = Field(default=25.0, ge=-20.0, le=80.0, description="Coolant supply temperature in °C")
+    flow_rate_lpm: float | None = Field(
+        default=None,
+        gt=0,
+        description="Coolant flow rate per GPU in L/min. If None, auto-optimized to meet target.",
+    )
+    geometry: Geometry | None = Field(
+        default=None,
+        description="Cold plate geometry overrides. If None, uses standard defaults.",
+    )
+    r_jc_k_per_w: float = Field(default=0.04, ge=0, description="Junction-to-case thermal resistance in K/W")
+    r_tim_k_per_w: float = Field(default=0.02, ge=0, description="TIM resistance in K/W")
+
+    @model_validator(mode="after")
+    def margin_less_than_target(self) -> "DecisionScenario":
+        if self.margin_c >= self.target_junction_temp_c:
+            raise ValueError("margin_c must be less than target_junction_temp_c")
+        return self
+
+
+class DecisionReport(BaseModel):
+    """Structured first-pass cooling decision memo.
+
+    Synthesizes single-point analysis, flow optimization, rack modeling, and
+    sensitivity outputs into an actionable engineering recommendation. The
+    rendered_memo field always contains a human-readable markdown summary.
+
+    Model blind spots are always populated from documented limitations — never
+    suppressed. See docs/physics.md for full scope.
+    """
+
+    scenario_label: str
+    feasible: bool = Field(description="True if target Tj can be met within the search flow range")
+    risk_level: RiskLevel = Field(
+        description="LOW: >10°C margin remaining; MEDIUM: 5–10°C; HIGH: <5°C or infeasible"
+    )
+    recommended_flow: FlowBand
+    recommended_supply_temp_c: float
+    junction_temp_at_recommended_c: float
+    margin_remaining_c: float = Field(
+        description="Headroom to the actual hard limit: target_junction_temp_c - Tj_at_recommended_flow"
+    )
+    topology_recommendation: str = Field(description="Topology rationale (populated when gpu_count > 1)")
+    uncertainty_section: dict[str, float] = Field(
+        description="Uncertainty contributors in °C, keyed by source"
+    )
+    warnings: list[str]
+    blind_spots: list[str] = Field(description="Model limitations always reported to the caller")
+    rendered_memo: str = Field(description="Markdown-formatted engineering memo")

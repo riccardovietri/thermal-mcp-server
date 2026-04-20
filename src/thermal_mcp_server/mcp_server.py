@@ -1,4 +1,4 @@
-"""MCP server exposing three thermal analysis tools."""
+"""MCP server exposing thermal analysis tools for liquid-cooled GPU cold plates."""
 
 from __future__ import annotations
 
@@ -7,8 +7,16 @@ from typing import Any
 from fastmcp import FastMCP
 from pydantic import ValidationError
 
+from .decision_report import generate_decision_report
 from .physics import COOLANTS, analyze, analyze_rack, compute_sensitivity, optimize_flow
-from .schemas import AnalyzeColdplateInput, AnalyzeRackInput, CompareCoolantsInput, Geometry, OptimizeFlowRateInput
+from .schemas import (
+    AnalyzeColdplateInput,
+    AnalyzeRackInput,
+    CompareCoolantsInput,
+    DecisionScenario,
+    Geometry,
+    OptimizeFlowRateInput,
+)
 
 mcp = FastMCP("thermal-mcp-server")
 
@@ -283,6 +291,87 @@ def analyze_rack_tool(
     return analyze_rack_impl(
         gpu_count, topology, heat_load_per_gpu_w, total_flow_lpm,
         cdu_supply_temp_c, ambient_temp_c, coolant, r_jc_k_per_w, r_tim_k_per_w, geometry,
+    )
+
+
+def generate_decision_report_impl(
+    chip_label: str = "GPU",
+    heat_load_w: float = 700.0,
+    gpu_count: int = 1,
+    topology: str = "parallel",
+    target_junction_temp_c: float = 83.0,
+    margin_c: float = 5.0,
+    coolant: str = "water",
+    inlet_temp_c: float = 25.0,
+    flow_rate_lpm: float | None = None,
+    geometry: dict[str, Any] | None = None,
+    r_jc_k_per_w: float = 0.04,
+    r_tim_k_per_w: float = 0.02,
+) -> dict:
+    try:
+        scenario = DecisionScenario(
+            chip_label=chip_label,
+            heat_load_w=heat_load_w,
+            gpu_count=gpu_count,
+            topology=topology,
+            target_junction_temp_c=target_junction_temp_c,
+            margin_c=margin_c,
+            coolant=coolant,
+            inlet_temp_c=inlet_temp_c,
+            flow_rate_lpm=flow_rate_lpm,
+            geometry=_geometry_from_dict(geometry),
+            r_jc_k_per_w=r_jc_k_per_w,
+            r_tim_k_per_w=r_tim_k_per_w,
+        )
+    except ValidationError as exc:
+        return {"error": exc.errors()}
+    return generate_decision_report(scenario).model_dump()
+
+
+@mcp.tool(name="generate_decision_report")
+def generate_decision_report_tool(
+    chip_label: str = "GPU",
+    heat_load_w: float = 700.0,
+    gpu_count: int = 1,
+    topology: str = "parallel",
+    target_junction_temp_c: float = 83.0,
+    margin_c: float = 5.0,
+    coolant: str = "water",
+    inlet_temp_c: float = 25.0,
+    flow_rate_lpm: float | None = None,
+    geometry: dict[str, Any] | None = None,
+    r_jc_k_per_w: float = 0.04,
+    r_tim_k_per_w: float = 0.02,
+):
+    """Generate a first-pass cooling decision memo for a GPU liquid cooling scenario.
+
+    Synthesizes flow optimization, sensitivity analysis, rack modeling, and
+    uncertainty estimates into a structured engineering recommendation with
+    explicit guardbands and model blind spots always present.
+
+    Returns a feasibility verdict, recommended per-GPU flow band, risk level
+    (LOW/MEDIUM/HIGH based on margin remaining), uncertainty contributors,
+    topology rationale for multi-GPU racks, and a rendered markdown memo.
+
+    Args:
+        chip_label: Display label for the chip (e.g. "H100 SXM"). Not validated.
+        heat_load_w: Chip thermal design power in watts.
+        gpu_count: Number of GPUs in the rack (1 = single cold plate analysis).
+        topology: Rack plumbing — "series" or "parallel" (used when gpu_count > 1).
+        target_junction_temp_c: Maximum allowable junction temperature in °C.
+        margin_c: Safety margin in °C subtracted from target before optimization.
+            Recommended ≥5°C to cover R_jc variation (±20%) and TIM aging.
+        coolant: Coolant type — "water" or "glycol50".
+        inlet_temp_c: Coolant supply temperature in °C.
+        flow_rate_lpm: Per-GPU flow rate. If None, auto-optimized to meet target.
+        geometry: Optional cold plate geometry overrides.
+        r_jc_k_per_w: Junction-to-case resistance in K/W.
+        r_tim_k_per_w: TIM resistance in K/W.
+    """
+    return generate_decision_report_impl(
+        chip_label, heat_load_w, gpu_count, topology, target_junction_temp_c,
+        margin_c, coolant, inlet_temp_c, flow_rate_lpm, geometry,
+        r_jc_k_per_w, r_tim_k_per_w,
     )
 
 
