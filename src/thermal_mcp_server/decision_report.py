@@ -7,6 +7,8 @@ No new physics here — this is synthesis and presentation only.
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 from .physics import analyze, analyze_rack, compute_sensitivity, optimize_flow
 from .schemas import (
     AnalyzeColdplateInput,
@@ -57,20 +59,36 @@ def _topology_rationale(scenario: DecisionScenario, per_gpu_flow_lpm: float) -> 
     if scenario.gpu_count <= 1:
         return "Single GPU — topology not applicable."
 
-    # Run both topologies at the same total flow and compare max Tj.
-    total_flow = per_gpu_flow_lpm * scenario.gpu_count
+    # Compare topologies at the same per-GPU flow (the user-relevant operating
+    # point). Series has total = per-GPU (single loop), parallel has
+    # total = per-GPU × N (split across N branches). See analyze_rack semantics.
     common = dict(
         gpu_count=scenario.gpu_count,
         heat_load_per_gpu_w=scenario.heat_load_w,
-        total_flow_lpm=total_flow,
         cdu_supply_temp_c=scenario.inlet_temp_c,
         coolant=scenario.coolant,
         r_jc_k_per_w=scenario.r_jc_k_per_w,
         r_tim_k_per_w=scenario.r_tim_k_per_w,
         geometry=_resolve_geometry(scenario.geometry),
     )
-    r_series = analyze_rack(AnalyzeRackInput(topology="series", **common))
-    r_parallel = analyze_rack(AnalyzeRackInput(topology="parallel", **common))
+    try:
+        r_series = analyze_rack(
+            AnalyzeRackInput(topology="series", total_flow_lpm=per_gpu_flow_lpm, **common)
+        )
+    except ValidationError:
+        # Series stacking overflowed the model bound — comparison can't run.
+        return (
+            f"{scenario.topology} topology selected. Series comparison unavailable: "
+            f"{scenario.gpu_count} GPUs in series at {per_gpu_flow_lpm:.2f} LPM "
+            "would push downstream coolant past the 80°C model bound."
+        )
+    r_parallel = analyze_rack(
+        AnalyzeRackInput(
+            topology="parallel",
+            total_flow_lpm=per_gpu_flow_lpm * scenario.gpu_count,
+            **common,
+        )
+    )
 
     delta_tj = r_series.max_junction_temp_c - r_parallel.max_junction_temp_c
     delta_pump = r_series.total_pump_power_w - r_parallel.total_pump_power_w
@@ -217,11 +235,55 @@ def generate_decision_report(scenario: DecisionScenario) -> DecisionReport:
     )
 
     # Step 2: full analysis at recommended flow for Tj and sensitivity.
+    # Sensitivity is per-coldplate; rack physics is layered on top below.
     rec_inp = _make_coldplate_input(scenario, recommended_lpm)
     rec_result = analyze(rec_inp)
     sensitivity = compute_sensitivity(rec_inp)
+    rack_warnings: list[str] = []
 
-    tj_at_rec = rec_result.junction_temp_c
+    # Step 2b: for multi-GPU, override the single-coldplate verdict with
+    # rack-aware physics. In series, downstream GPUs see hotter inlets, so a
+    # single-coldplate "feasible" reading can hide a real overheat at the last
+    # GPU. In parallel, results match single-coldplate but we still surface
+    # the rack max for clarity.
+    if scenario.gpu_count > 1:
+        # AnalyzeRackInput.total_flow_lpm is the flow at the rack inlet:
+        # - series: that single flow passes through every GPU, so total = per-GPU
+        # - parallel: the flow is split across N branches, so total = N × per-GPU
+        if scenario.topology == "series":
+            total_flow_for_rack = recommended_lpm
+        else:
+            total_flow_for_rack = recommended_lpm * scenario.gpu_count
+        try:
+            rack_inp = AnalyzeRackInput(
+                gpu_count=scenario.gpu_count,
+                topology=scenario.topology,
+                heat_load_per_gpu_w=scenario.heat_load_w,
+                total_flow_lpm=total_flow_for_rack,
+                cdu_supply_temp_c=scenario.inlet_temp_c,
+                coolant=scenario.coolant,
+                r_jc_k_per_w=scenario.r_jc_k_per_w,
+                r_tim_k_per_w=scenario.r_tim_k_per_w,
+                geometry=geom,
+            )
+            rack_result = analyze_rack(rack_inp)
+            tj_at_rec = rack_result.max_junction_temp_c
+            rack_warnings = list(rack_result.warnings)
+            # Rack physics has the final say on feasibility for multi-GPU.
+            feasible = feasible and (tj_at_rec <= effective_target)
+        except ValidationError:
+            # Series stacking pushed a downstream inlet past the 80°C schema
+            # bound. That is itself a clear infeasibility signal.
+            tj_at_rec = rec_result.junction_temp_c  # best-effort placeholder
+            rack_warnings = [
+                f"{scenario.topology} topology with {scenario.gpu_count} GPUs "
+                f"at {recommended_lpm:.2f} LPM/GPU pushes downstream coolant "
+                f"past the 80°C model bound; configuration is infeasible."
+            ]
+            feasible = False
+    else:
+        tj_at_rec = rec_result.junction_temp_c
+
     # Margin to the actual hard limit (before subtracting margin_c), so callers
     # see total headroom to the design ceiling — not headroom to the internal
     # optimization sub-target.
@@ -253,13 +315,13 @@ def generate_decision_report(scenario: DecisionScenario) -> DecisionReport:
     }
 
     # Step 6: aggregate warnings.
-    all_warnings = list(rec_result.warnings)
+    all_warnings = list(rec_result.warnings) + rack_warnings
     if not feasible:
         all_warnings.insert(
             0,
             f"INFEASIBLE: cannot reach Tj ≤ {effective_target:.1f}°C "
             f"(target {scenario.target_junction_temp_c}°C − margin {scenario.margin_c}°C) "
-            "within the search flow range.",
+            "with the recommended flow and selected topology.",
         )
 
     report = DecisionReport(

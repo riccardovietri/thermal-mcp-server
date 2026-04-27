@@ -191,6 +191,75 @@ def test_report_series_topology_rationale():
 
 
 # ---------------------------------------------------------------------------
+# Rack-aware feasibility (PR28 review fix #1)
+#
+# Single-coldplate optimization can mislabel multi-GPU series scenarios as
+# feasible because it ignores temperature stacking. These tests pin the
+# corrected behaviour: the rack-level max Tj is the source of truth for
+# feasibility, risk, and margin once gpu_count > 1.
+# ---------------------------------------------------------------------------
+
+def test_report_series_rack_uses_rack_max_tj():
+    """8-GPU series at the same per-GPU flow gives a higher Tj than 1-GPU.
+    The rack-aware fix must surface that — Tj_at_recommended must reflect
+    the hottest GPU in the chain, not the first.
+    """
+    single = generate_decision_report(_h100_scenario(gpu_count=1))
+    series_8 = generate_decision_report(_h100_scenario(gpu_count=8, topology="series"))
+    # 8-GPU series must be at least as hot as 1-GPU at the same per-GPU flow.
+    assert series_8.junction_temp_at_recommended_c > single.junction_temp_at_recommended_c
+    # And meaningfully so — series stacking should produce several °C of rise.
+    assert series_8.junction_temp_at_recommended_c - single.junction_temp_at_recommended_c > 3.0
+
+
+def test_report_parallel_rack_matches_single_gpu_tj():
+    """Parallel topology gives every GPU the same inlet, so 8-GPU parallel Tj
+    at per-GPU flow F should match 1-GPU at flow F.
+    """
+    single = generate_decision_report(_h100_scenario(gpu_count=1))
+    parallel_8 = generate_decision_report(_h100_scenario(gpu_count=8, topology="parallel"))
+    assert abs(parallel_8.junction_temp_at_recommended_c - single.junction_temp_at_recommended_c) < 0.5
+
+
+def test_report_series_can_flip_feasibility_to_infeasible():
+    """A scenario that is feasible as a single GPU can become infeasible as
+    an 8-GPU series rack because of coolant temperature stacking. The
+    rack-aware fix must catch this.
+    """
+    # Choose a target that single-coldplate just barely meets but 8-GPU series
+    # cannot. H100 700W water 25°C inlet, target 80°C, margin 0.
+    single = generate_decision_report(
+        _h100_scenario(target_junction_temp_c=80.0, margin_c=0.0, gpu_count=1)
+    )
+    series_8 = generate_decision_report(
+        _h100_scenario(target_junction_temp_c=80.0, margin_c=0.0, gpu_count=8, topology="series")
+    )
+    assert single.feasible is True
+    assert series_8.feasible is False
+
+
+def test_report_extreme_series_does_not_crash():
+    """A series rack so deep that downstream coolant exceeds the 80°C model
+    bound must NOT raise — it must be reported as infeasible with a clear
+    warning. This is the schema-overflow path inside analyze_rack.
+    """
+    report = generate_decision_report(
+        _h100_scenario(
+            heat_load_w=1500.0,           # high TDP per GPU
+            gpu_count=64,                  # deep chain
+            topology="series",
+            inlet_temp_c=60.0,             # already hot supply
+            target_junction_temp_c=83.0,
+            margin_c=0.0,
+        )
+    )
+    assert report.feasible is False
+    # Warning must explain the overflow, not just say "infeasible"
+    combined_warnings = " ".join(report.warnings).lower()
+    assert "infeasible" in combined_warnings or "model bound" in combined_warnings or "80" in combined_warnings
+
+
+# ---------------------------------------------------------------------------
 # Flow band structure
 # ---------------------------------------------------------------------------
 
@@ -246,3 +315,26 @@ def test_mcp_impl_geometry_passthrough():
     assert "feasible" in r_narrow
     # Narrower channels → different Tj
     assert r_default["junction_temp_at_recommended_c"] != r_narrow["junction_temp_at_recommended_c"]
+
+
+def test_mcp_impl_extreme_series_returns_error_dict_not_crash():
+    """PR28 review fix #2: schema-valid scenarios that trigger downstream
+    ValidationError during synthesis (e.g. extreme series stacking that
+    overflows the 80°C model bound) must return an {"error": ...} dict,
+    matching the contract of analyze_rack_impl. The MCP tool must not raise.
+    """
+    # The same configuration that triggers the schema-overflow path inside
+    # analyze_rack — but routed through the MCP wrapper.
+    result = generate_decision_report_impl(
+        heat_load_w=1500.0,
+        gpu_count=64,
+        topology="series",
+        inlet_temp_c=60.0,
+        target_junction_temp_c=83.0,
+        margin_c=0.0,
+    )
+    assert isinstance(result, dict)
+    # Either we caught it cleanly inside synthesis (returned a feasible=False
+    # report) or the MCP wrapper caught it as an error dict. Both are
+    # acceptable outcomes; what is NOT acceptable is an unhandled exception.
+    assert ("feasible" in result and result["feasible"] is False) or "error" in result

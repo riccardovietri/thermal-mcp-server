@@ -325,7 +325,14 @@ def generate_decision_report_impl(
         )
     except ValidationError as exc:
         return {"error": exc.errors()}
-    return generate_decision_report(scenario).model_dump()
+    try:
+        return generate_decision_report(scenario).model_dump()
+    except ValidationError as exc:
+        # Synthesis composes analyze_rack/optimize_flow internally; a
+        # schema-valid scenario can still trigger downstream validation
+        # (e.g. extreme series scenarios). Mirror the analyze_rack_impl
+        # contract: return {"error": ...} instead of raising.
+        return {"error": exc.errors()}
 
 
 @mcp.tool(name="generate_decision_report")
