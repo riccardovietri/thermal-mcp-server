@@ -158,6 +158,7 @@ Before marking any physics change as done, verify:
 - Main branch is the stable baseline. PRs from `claude/` branches.
 - Commit style: `fix:`, `feat:`, `docs:`, `examples:`, `test:`
 - Physics changes need hand-calc validation before merge (see above).
+- See `docs/review-policy.md` for the full PR review gate and merge requirements.
 - See `docs/decisions.md` for durable roadmap decisions such as the ROI calculator split.
 
 ## Memory model
