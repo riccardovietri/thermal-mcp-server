@@ -125,7 +125,7 @@ Verification:
 - `uv build` passed.
 - `uv run python examples/quickstart.py` passed.
 - `uv run python examples/rack_sizing_example.py` passed.
-- `rg -n -i "portfolio|cleanup" ...` returned no matches.
+- Forbidden-term scan returned no matches.
 
 ### Ruff and CI gate
 
@@ -145,6 +145,50 @@ Verification:
 - `uv run python examples/rack_sizing_example.py` passed.
 - `uv run ruff check .` passed.
 - `uv run ruff format --check .` passed.
+
+## Final Gate
+
+Fresh environment: `/private/tmp/thermal-review-venv.0pYrzc`
+
+Verification:
+
+- `/private/tmp/thermal-review-venv.0pYrzc/bin/python -m pip install -e ".[dev]"` passed.
+- `/private/tmp/thermal-review-venv.0pYrzc/bin/pytest` passed: `74 passed, 2 warnings in 1.59s`.
+- `/private/tmp/thermal-review-venv.0pYrzc/bin/python examples/quickstart.py` passed.
+- `/private/tmp/thermal-review-venv.0pYrzc/bin/python examples/rack_sizing_example.py` passed.
+- `/private/tmp/thermal-review-venv.0pYrzc/bin/ruff check .` passed.
+- `/private/tmp/thermal-review-venv.0pYrzc/bin/ruff format --check .` passed.
+- README test count matches the final test count: 74.
+- Forbidden-term scan returned no matches after this log update.
+- CI config now runs tests, build, Ruff, and the two smoke examples.
+
+Warnings:
+
+- Two dependency deprecation warnings came from transitive packages
+  (`opentelemetry` and `fastmcp`), not project code.
+
+## Summary Of Changes
+
+- First-touch run path: added two local examples and pytest smoke coverage.
+- Documentation: refreshed README, MCP docs, assumptions, model overview, and
+  public-spec source notes.
+- Review process: removed funded Claude auto-review workflows and aligned review
+  guidance around Codex plus human review.
+- Scope: moved the financial-cost example to `_attic/` for human review.
+- Tooling: added conservative Ruff checks and formatting to local and CI gates.
+
+## Remaining Limitations
+
+- Rack pressure drop excludes manifolds and headers.
+- Fluid properties use nominal fixed values, not temperature-dependent tables.
+- High-power public reference cases include estimates where vendors do not
+  publish all inputs.
+- `_attic/` content is preserved for review, not active package behavior.
+
+## Proposed Package Description
+
+A Python package and MCP server for first-pass liquid-cooled accelerator
+cold-plate and rack thermal sizing.
 
 ## Open Questions For Morning Review
 
