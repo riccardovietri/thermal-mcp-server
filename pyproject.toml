@@ -28,9 +28,12 @@ dependencies = [
     "pydantic>=2.6.0",
 ]
 
+# Dev tooling is declared here (PEP 621 extra, for `pip install -e ".[dev]"`)
+# and mirrored under [dependency-groups] (PEP 735, for `uv sync --group dev`).
+# Keep the two lists identical.
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
+    "pytest>=9.0.2",
     "pytest-cov>=4.1.0",
     "ruff>=0.8.0",
 ]
