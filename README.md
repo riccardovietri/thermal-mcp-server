@@ -5,7 +5,7 @@
 
 # thermal-mcp-server
 
-**A physics engine for liquid-cooled GPU systems, exposed as an AI-callable MCP server.** Ask Claude to size a cooling system for an H100 cluster, optimize cold plate flow rates, or compare water versus glycol — and get first-principles answers backed by hand-validated thermal models.
+**Open-source reference engine for first-pass GPU liquid cooling trade studies.** Size cold plates, optimize flow rates, compare coolants, and generate structured decision memos — with hand-validated physics, explicit uncertainty bounds, and documented model limitations. Exposed as a Python API and AI-callable MCP server.
 
 ## Quick Start
 
@@ -67,7 +67,7 @@ For rack-scale analysis (NVL72 CDU sizing, series vs. parallel topology, B200 at
 
 ## Tools
 
-Four MCP tools, each also available as a Python function:
+Five MCP tools, each also available as a Python function:
 
 | Tool | What it does |
 |------|-------------|
@@ -75,6 +75,7 @@ Four MCP tools, each also available as a Python function:
 | `compare_coolants` | Side-by-side water vs. glycol at identical conditions |
 | `optimize_flow_rate` | Binary search for minimum flow to meet a Tj target |
 | `analyze_rack` | N identical GPUs in series or parallel: max Tj, per-GPU temps, total flow, system ΔP, CDU return temp |
+| `generate_decision_report` | First-pass decision memo: recommended flow band, risk level, uncertainty breakdown, topology rationale, model blind spots |
 
 See [`docs/mcp.md`](docs/mcp.md) for full input/output schemas.
 

@@ -1,0 +1,6 @@
+# Codex project configuration for thermal-mcp-server
+
+# Fall back to CLAUDE.md if no AGENTS.md is found at repo root.
+# AGENTS.md now exists at repo root and points here, so this is belt-and-suspenders.
+project_doc_fallback_filenames = ["CLAUDE.md"]
+project_doc_max_bytes = 65536
