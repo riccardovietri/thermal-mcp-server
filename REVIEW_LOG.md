@@ -171,7 +171,9 @@ Warnings:
 
 - First-touch run path: added two local examples and pytest smoke coverage.
 - Documentation: refreshed README, MCP docs, assumptions, model overview, and
-  public-spec source notes.
+  public-spec source notes. After initial review, restored the README MCP
+  client screenshot from `main` as concrete evidence that the server works
+  through MCP.
 - Review process: removed funded Claude auto-review workflows and aligned review
   guidance around Codex plus human review.
 - Scope: moved the financial-cost example to `_attic/` for human review.

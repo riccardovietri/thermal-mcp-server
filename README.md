@@ -90,6 +90,13 @@ If your MCP client does not inherit your shell `PATH`, use the absolute path to
 the Python executable inside the environment where `thermal-mcp-server` is
 installed.
 
+Example MCP client run:
+
+<img width="1768" height="1750" alt="MCP client answering a liquid-cooling question by calling thermal-mcp-server tools" src="https://github.com/user-attachments/assets/7e3fb436-38d2-477b-a4dd-e5a2a740d463" />
+
+The client calls `analyze_coldplate` through the MCP server, receives the
+thermal result, and interprets the output in the conversation.
+
 ## Tools
 
 | Tool | Purpose |
