@@ -68,7 +68,10 @@ These are ignored generated artifacts, not repo content.
 
 ## Moved To `_attic/`
 
-None yet.
+- `_attic/ai_factory_cooling_budget.py` - moved from `examples/` because it
+  includes electricity-cost and annual operating-cost estimates. The repo
+  decision in `docs/decisions.md` says ROI and financial modeling belong in a
+  separate package or app.
 
 ## Workstream Updates
 
@@ -86,6 +89,17 @@ Verification:
 - `uv build` passed.
 - `uv run python examples/quickstart.py` passed.
 - `uv run python examples/rack_sizing_example.py` passed.
+
+### Scope alignment
+
+Moved:
+
+- `examples/ai_factory_cooling_budget.py` to `_attic/ai_factory_cooling_budget.py`
+
+Reason:
+
+- The example still runs, but it includes cost assumptions that belong outside
+  this core physics package per `docs/decisions.md`.
 
 ## Open Questions For Morning Review
 
