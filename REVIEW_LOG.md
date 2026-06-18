@@ -70,6 +70,23 @@ These are ignored generated artifacts, not repo content.
 
 None yet.
 
+## Workstream Updates
+
+### First-touch examples
+
+Added:
+
+- `examples/quickstart.py`
+- `examples/rack_sizing_example.py`
+- `tests/test_examples.py`
+
+Verification:
+
+- `uv run pytest` passed: `74 passed in 0.94s`.
+- `uv build` passed.
+- `uv run python examples/quickstart.py` passed.
+- `uv run python examples/rack_sizing_example.py` passed.
+
 ## Open Questions For Morning Review
 
 - Whether `_attic/` should stay in the repository long term or only serve this
