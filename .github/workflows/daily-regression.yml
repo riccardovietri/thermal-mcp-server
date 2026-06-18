@@ -24,8 +24,9 @@ jobs:
           for script in \
             examples/nvl72_rack_analysis.py \
             examples/rack_topology_tradeoffs.py \
-            examples/ai_factory_cooling_budget.py \
-            examples/real_chip_benchmarks.py; do
+            examples/real_chip_benchmarks.py \
+            examples/quickstart.py \
+            examples/rack_sizing_example.py; do
             if [ -f "$script" ]; then
               echo "=== $script ==="
               uv run python "$script"

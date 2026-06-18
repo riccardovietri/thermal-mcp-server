@@ -5,19 +5,75 @@
 
 # thermal-mcp-server
 
-**Open-source reference engine for first-pass GPU liquid cooling trade studies.** Size cold plates, optimize flow rates, compare coolants, and generate structured decision memos — with hand-validated physics, explicit uncertainty bounds, and documented model limitations. Exposed as a Python API and AI-callable MCP server.
+A Python package and MCP server that exposes simplified liquid-cooled accelerator thermal models as AI-callable tools for rack-level cooling analysis.
 
-## Quick Start
+## What It Models
 
-**Try it now** — open the [interactive notebook in Colab](https://colab.research.google.com/github/riccardovietri/thermal-mcp-server/blob/main/examples/interactive_sizing.ipynb) to run NVL72 rack sizing, topology comparisons, and flow optimization interactively.
+- Steady-state 1D thermal-resistance networks for GPU cold plates.
+- Coolant heat pickup from energy balance.
+- Darcy-Weisbach pressure drop with simple laminar, transition, and turbulent handling.
+- Water and 50/50 glycol comparisons using fixed nominal properties.
+- Identical-GPU racks in series or parallel topology.
+- First-pass CDU flow, pressure-drop, return-temperature, and junction-temperature sizing.
+- Public accelerator reference cases with explicit source and estimate labels.
 
-**Install and use as an MCP server:**
+## What It Does Not Model
+
+- It is not a CFD solver or vendor thermal-design substitute.
+- It is not validated against proprietary test data.
+- It does not model manifold/header pressure losses, pump curves, fouling, transient/two-phase behavior, 2D spreading, detailed cold-plate geometry, or flow maldistribution.
+- It does not support heterogeneous racks; each rack analysis assumes identical GPUs and cold plates.
+- Financial and ROI modeling belongs outside this package.
+
+## Quickstart
+
+```bash
+git clone https://github.com/riccardovietri/thermal-mcp-server.git
+cd thermal-mcp-server
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+pytest
+python examples/quickstart.py
+```
+
+Expected output from `python examples/quickstart.py`:
+
+```text
+thermal-mcp-server quickstart
+
+Single H100 SXM cold plate
+  Heat load:        700 W
+  Flow rate:        8.0 LPM water
+  Inlet temp:       25.0 deg C
+  Junction temp:    70.9 deg C
+  Margin to 83 C:   12.1 deg C
+  Pressure drop:    16.8 kPa
+  Flow regime:      transitional
+
+8-GPU rack, parallel topology
+  Rack heat load:   5.6 kW
+  Total CDU flow:   64.0 LPM
+  Max junction:     70.9 deg C
+  CDU return temp:  26.3 deg C
+  Cold-plate dP:    16.8 kPa
+```
+
+For a series-vs-parallel rack comparison:
+
+```bash
+python examples/rack_sizing_example.py
+```
+
+## MCP Usage
+
+Install the package:
 
 ```bash
 pip install thermal-mcp-server
 ```
 
-Add to your MCP client config (`claude_desktop_config.json` for Claude Desktop):
+Add the server to an MCP client:
 
 ```json
 {
@@ -30,113 +86,87 @@ Add to your MCP client config (`claude_desktop_config.json` for Claude Desktop):
 }
 ```
 
-> **Note:** Claude Desktop does not inherit your shell's `PATH`. If the above doesn't work, use the absolute path to your Python binary (e.g. `/usr/local/bin/python` or the path inside a virtualenv).
-
-Once configured, ask Claude engineering questions directly:
-
-> *"I have 8 H100 SXM GPUs at 700 W each, water cooling at 8 LPM per cold plate, 25°C supply. What's the junction temperature and thermal margin?"*
-
-> *"Compare water versus 50/50 glycol for a 700 W load at 8 LPM."*
-
-> *"Size a CDU for 8 H100 GPUs in a parallel manifold — total flow, system ΔP, and return water temperature."*
-
-Claude calls the relevant tool, interprets the physics, and answers in context.
-
-<img width="1768" height="1750" alt="Claude Desktop answering a liquid cooling question by calling thermal-mcp-server tools" src="https://github.com/user-attachments/assets/7e3fb436-38d2-477b-a4dd-e5a2a740d463" />
-
-*Claude Desktop calling `analyze_coldplate` via the MCP server. The user asks a natural-language thermal question; Claude picks the right tool, runs the physics, and interprets the result.*
-
-## Example: H100 SXM Baseline
-
-This is the hand-calculation validated reference case — every intermediate value (Reynolds number, Nusselt number, convection coefficient, pressure drop) is independently verified in `tests/test_physics_behavior.py`.
-
-```python
-from thermal_mcp_server.physics import analyze
-from thermal_mcp_server.schemas import AnalyzeColdplateInput
-
-result = analyze(AnalyzeColdplateInput(
-    heat_load_w=700, flow_rate_lpm=8.0, inlet_temp_c=25.0, coolant="water"
-))
-print(f"Junction temp: {result.junction_temp_c:.1f}°C")   # 70.9°C
-print(f"Thermal margin: {83 - result.junction_temp_c:.1f}°C below throttle onset")
-print(f"Flow regime: {result.regime}")                      # transitional (Re ≈ 3734)
-print(f"Pressure drop: {result.pressure_drop_pa:.0f} Pa")   # 16800 Pa (0.17 bar)
-```
-
-For rack-scale analysis (NVL72 CDU sizing, series vs. parallel topology, B200 at 1,200 W), see the [interactive notebook](https://colab.research.google.com/github/riccardovietri/thermal-mcp-server/blob/main/examples/interactive_sizing.ipynb).
+If your MCP client does not inherit your shell `PATH`, use the absolute path to
+the Python executable inside the environment where `thermal-mcp-server` is
+installed.
 
 ## Tools
 
-Five MCP tools, each also available as a Python function:
+| Tool | Purpose |
+|------|---------|
+| `analyze_coldplate` | Single cold-plate thermal and hydraulic analysis |
+| `compare_coolants` | Water vs 50/50 glycol comparison at identical conditions |
+| `optimize_flow_rate` | Minimum flow search for a junction-temperature target |
+| `analyze_rack` | Identical-GPU rack analysis in series or parallel topology |
+| `generate_decision_report` | First-pass sizing memo with flow band, risk, uncertainty, and model blind spots |
 
-| Tool | What it does |
-|------|-------------|
-| `analyze_coldplate` | Single-point thermal + hydraulic analysis: Tj, resistance breakdown, ΔP, regime, pump power |
-| `compare_coolants` | Side-by-side water vs. glycol at identical conditions |
-| `optimize_flow_rate` | Binary search for minimum flow to meet a Tj target |
-| `analyze_rack` | N identical GPUs in series or parallel: max Tj, per-GPU temps, total flow, system ΔP, CDU return temp |
-| `generate_decision_report` | First-pass decision memo: recommended flow band, risk level, uncertainty breakdown, topology rationale, model blind spots |
+See [`docs/mcp.md`](docs/mcp.md) for tool contracts.
 
-See [`docs/mcp.md`](docs/mcp.md) for full input/output schemas.
+## Physics Assumptions
 
-## How It Works
+The model uses:
 
-The physics engine models a cold plate as a 1D thermal resistance network:
-
-```
-T_junction = T_inlet + Q × (R_jc + R_tim + R_base + R_conv) + ΔT_coolant/2
-```
-
-- **R_jc / R_tim:** Package resistances (chip manufacturer spec or estimate)
-- **R_base:** Copper base conduction (geometry + k = 385 W/m·K)
-- **R_conv:** Forced convection — Dittus-Boelter (turbulent) or Nu = 4.36 (laminar), linearly blended through transition (Re 2,300–4,000)
-- **ΔP:** Darcy-Weisbach with Blasius friction factor, same transition blend
-
-Rack-level model stacks N single-GPU analyses in series (cumulative temperature rise) or parallel (uniform inlet, flow split) topology.
-
-```mermaid
-flowchart LR
-    A["Input\nchip power, flow,\ncoolant, geometry"] --> B["Physics Engine\nDittus-Boelter · Darcy-Weisbach\nR_total network"]
-    B --> C["Output\nT_junction · ΔP\nthermal margin · pump power"]
+```text
+T_junction = T_inlet + 0.5 * coolant_rise + Q * R_total
+R_total = R_jc + R_tim + R_base + R_conv
+coolant_rise = Q / (m_dot * cp)
 ```
 
-See [`docs/physics.md`](docs/physics.md) for the full physics documentation including equations and assumptions.
+Heat transfer uses Dittus-Boelter for turbulent flow, Nu = 4.36 for laminar
+flow, and a linear blend in transition. Pressure drop uses Darcy-Weisbach with
+the same regime split.
 
-## Validation
+Read the concise model notes in [`docs/model_overview.md`](docs/model_overview.md)
+and [`docs/assumptions.md`](docs/assumptions.md). The detailed derivation and
+hand-calculation references are in [`docs/physics.md`](docs/physics.md).
 
-Model outputs against published chip specs. All runs use water coolant, 25°C inlet.
+## Public Reference Cases
 
-| Chip | TDP | Tj Design Ceiling | Model Tj | Margin | Notes |
-|------|-----|-------------------|----------|--------|-------|
-| H100 SXM | 700 W | 83°C | **70.9°C** at 8 LPM | 12.1°C | Default geometry; hand-calc validated |
-| MI300X | 750 W | ~85°C (proxy) | **74.2°C** at 8 LPM | ~10°C | AMD does not publish Tj_max |
-| B200 NVL72 | 1,200 W | ~75°C (est.) | **75.0°C** at 9.3 LPM/GPU | 0°C at limit | R_jc=0.02 K/W est.; NVIDIA does not publish |
-| Gaudi 3 OAM | 900 W (air) / 1,200 W (liquid) | ~85°C (proxy) | Requires B200-class geometry | — | Default H100 geometry undersized for 1,200 W |
+The examples include H100 SXM, B200/NVL72-style, MI300X, and Gaudi 3 cases.
+Only H100 TDP and thermal limit are treated as vendor-published values in the
+default examples. Other limits, package resistances, and high-power cold-plate
+geometry are marked as estimates or proxies where vendors do not publish them.
 
-> **On B200 and Gaudi 3 numbers:** NVIDIA and Intel do not publish cold plate geometry or R_jc for these chips. The B200 analysis uses engineering estimates. Treat as indicative; real sizing requires vendor data.
+See [`docs/public_specs.md`](docs/public_specs.md) and
+[`examples/real_chip_benchmarks.py`](examples/real_chip_benchmarks.py).
 
-Chip sources: [NVIDIA H100 Datasheet](https://resources.nvidia.com/en-us-gpu-resources/h100-datasheet-24306) · [NVIDIA GB200 NVL72](https://www.nvidia.com/en-us/data-center/gb200-nvl72/) · [SemiAnalysis B200 thermal estimates](https://newsletter.semianalysis.com/p/gb200-hardware-architecture-and-component) · [AMD MI300X Data Sheet](https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/data-sheets/amd-instinct-mi300x-data-sheet.pdf) · [Intel Gaudi 3 Product Brief](https://cdrdv2-public.intel.com/817487/gaudi-3-ai-accelerator-hl-325l-oam-mezzanine-card-product-brief.pdf)
+## Tests
 
-## Known Limitations
+The current suite has 74 tests:
 
-These are documented explicitly because they bound what the model can and cannot tell you:
+- Physics behavior and hand-calculation checks.
+- MCP wrapper contracts and error envelopes.
+- Decision report behavior, including rack-aware feasibility.
+- Smoke tests for `examples/quickstart.py` and `examples/rack_sizing_example.py`.
 
-- **No manifold or header pressure losses** — rack ΔP is cold-plate-only. Real system ΔP should add 20–50% for manifold losses.
-- **No heterogeneous racks** — all GPUs assumed identical TDP, geometry, and thermal resistance.
-- **Steady-state only** — no transient thermal capacitance.
-- **Single-point fluid properties** — water and glycol50 properties fixed at 25°C nominal.
-- **No flow maldistribution** — uniform flow assumed across all cold plates.
+Run:
+
+```bash
+pytest
+```
 
 ## Development
 
 ```bash
-git clone https://github.com/riccardovietri/thermal-mcp-server.git
-cd thermal-mcp-server
 uv sync --group dev
-uv run pytest -v  # all tests should pass
+uv run pytest
+uv build
+uv run python examples/quickstart.py
+uv run python examples/rack_sizing_example.py
 ```
 
 ## Roadmap
 
-- **Interactive demo polish** — expand the [Colab notebook](https://colab.research.google.com/github/riccardovietri/thermal-mcp-server/blob/main/examples/interactive_sizing.ipynb) with sensitivity outputs and clearer walkthrough
-- **ROI calculator** — annual cooling cost delta between air and liquid, CDU payback period, per-GPU cooling cost
+- Pump-curve support as an explicit input instead of a fixed pump-efficiency estimate.
+- Transient thermal-capacitance model.
+- More public reference cases with clearly labeled source quality.
+- Interactive notebook polish for Colab use.
+- Cold-plate optimization only as a separate experimental module or package.
+
+## Why This Exists
+
+This project started as a way to explore how AI assistants can call lightweight
+engineering models directly instead of only producing static text. The package
+exposes simplified liquid-cooling calculations through Python and MCP tools,
+making it possible to ask design-tradeoff questions about accelerator cooling,
+rack-level CDU sizing, and coolant topology in a reproducible way.

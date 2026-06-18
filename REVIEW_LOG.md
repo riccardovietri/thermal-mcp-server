@@ -101,6 +101,32 @@ Reason:
 - The example still runs, but it includes cost assumptions that belong outside
   this core physics package per `docs/decisions.md`.
 
+### Documentation and review process
+
+Updated:
+
+- `README.md` now leads with local install, first-touch examples, model scope,
+  assumptions, test count, roadmap, and rationale.
+- Added `docs/model_overview.md`, `docs/assumptions.md`, and
+  `docs/public_specs.md`.
+- Updated `docs/mcp.md` for five tools.
+- Updated `CLAUDE.md` for the fifth MCP tool and current branch policy.
+- Updated `docs/review-policy.md` and `.github/PULL_REQUEST_TEMPLATE.md` to
+  reflect Codex/human review.
+- Removed `.github/workflows/claude.yml` and
+  `.github/workflows/claude-review-response.yml` because both require a funded
+  Anthropic API key.
+- Updated the daily regression example list after moving the cost-oriented
+  example to `_attic/`.
+
+Verification:
+
+- `uv run pytest` passed: `74 passed in 1.04s`.
+- `uv build` passed.
+- `uv run python examples/quickstart.py` passed.
+- `uv run python examples/rack_sizing_example.py` passed.
+- `rg -n -i "portfolio|cleanup" ...` returned no matches.
+
 ## Open Questions For Morning Review
 
 - Whether `_attic/` should stay in the repository long term or only serve this

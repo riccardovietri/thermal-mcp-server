@@ -10,9 +10,9 @@ The PR description must state: what changed, why, what was tested, known limitat
 Use the PR template.
 
 ### 2. Review
-The Claude review job runs automatically on every PR.  
-It checks: correctness, regressions, API compatibility, test coverage, docs drift, release risk.  
-Review is not optional commentary — it must be read before merge.
+Codex review and human review are the active review paths.
+They check correctness, regressions, API compatibility, test coverage, docs drift, and release risk.
+Review findings are not optional commentary; material findings must be read before merge.
 
 ### 3. Triage and remediation
 Every **[BLOCKING]** finding must be explicitly marked as one of:
@@ -41,9 +41,9 @@ A PR may be merged only when:
 
 | Role | Who | Scope |
 |------|-----|-------|
-| Author agent | Claude Code / Codex / human | Writes code, docs, tests |
-| Review agent | Claude Code Review workflow | Read-only, posts labeled findings |
-| Fix agent | Claude Review Response workflow | Applies accepted [BLOCKING] fixes, runs tests, posts summary |
+| Author agent | Codex / human / other coding agent | Writes code, docs, tests |
+| Review agent | Codex review / human reviewer | Read-only, posts findings |
+| Fix agent | PR author or assigned agent | Applies accepted [BLOCKING] fixes, runs tests, posts summary |
 | Merge approver | Human only | Final merge decision |
 
 **No agent auto-merges. No agent self-approves.**
