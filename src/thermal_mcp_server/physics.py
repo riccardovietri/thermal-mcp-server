@@ -263,9 +263,7 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
 
     warnings: list[str] = []
     if max_tj > 85:
-        warnings.append(
-            f"GPU {hottest_idx} (0-indexed) junction temperature {max_tj:.1f}°C exceeds 85°C design ceiling"
-        )
+        warnings.append(f"GPU {hottest_idx} (0-indexed) junction temperature {max_tj:.1f}°C exceeds 85°C design ceiling")
     warnings.extend(per_gpu_warnings)
 
     return AnalyzeRackOutput(

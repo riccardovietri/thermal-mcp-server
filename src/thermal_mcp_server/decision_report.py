@@ -27,8 +27,7 @@ KNOWN_LIMITATIONS: list[str] = [
     "Manifold and header pressure losses are not modeled; actual system ΔP will be higher.",
     "Fluid properties are assumed constant at the nominal inlet temperature; glycol viscosity "
     "varies ~2× over 20–60°C, which affects ΔP and Nusselt predictions at elevated temperatures.",
-    "All GPUs are assumed identical (same TDP, geometry, resistances); "
-    "real rack heterogeneity is not captured.",
+    "All GPUs are assumed identical (same TDP, geometry, resistances); real rack heterogeneity is not captured.",
     "Steady-state only — no transient thermal capacitance or thermal mass effects.",
     "Uniform flow distribution assumed; no maldistribution across channels or parallel branches.",
     "No boiling or two-phase flow; model is valid only for single-phase liquid cooling.",
@@ -36,7 +35,7 @@ KNOWN_LIMITATIONS: list[str] = [
 
 # Flow band scaling factors relative to the minimum feasible flow.
 _RECOMMENDED_FACTOR = 1.15  # 15% above minimum for operating margin
-_MAX_FACTOR = 1.50          # 50% above minimum as upper bound
+_MAX_FACTOR = 1.50  # 50% above minimum as upper bound
 
 
 def _resolve_geometry(geometry: Geometry | None) -> Geometry:
@@ -72,9 +71,7 @@ def _topology_rationale(scenario: DecisionScenario, per_gpu_flow_lpm: float) -> 
         geometry=_resolve_geometry(scenario.geometry),
     )
     try:
-        r_series = analyze_rack(
-            AnalyzeRackInput(topology="series", total_flow_lpm=per_gpu_flow_lpm, **common)
-        )
+        r_series = analyze_rack(AnalyzeRackInput(topology="series", total_flow_lpm=per_gpu_flow_lpm, **common))
     except ValidationError:
         # Series stacking overflowed the model bound — comparison can't run.
         return (
@@ -133,8 +130,7 @@ def _render_memo(report: DecisionReport) -> str:
         f"- **Flow rate (per GPU):** {report.recommended_flow.recommended_lpm:.2f} LPM "
         f"(min {report.recommended_flow.min_lpm:.2f}, search max {report.recommended_flow.max_lpm:.2f})",
         f"- **Junction temperature at recommended flow:** {report.junction_temp_at_recommended_c:.1f}°C",
-        f"- **Margin remaining:** {report.margin_remaining_c:.1f}°C "
-        f"(after {report.recommended_flow.basis})",
+        f"- **Margin remaining:** {report.margin_remaining_c:.1f}°C (after {report.recommended_flow.basis})",
         "",
     ]
 

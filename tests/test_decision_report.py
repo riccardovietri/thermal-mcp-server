@@ -6,12 +6,12 @@ import pytest
 
 from thermal_mcp_server.decision_report import KNOWN_LIMITATIONS, generate_decision_report
 from thermal_mcp_server.mcp_server import generate_decision_report_impl
-from thermal_mcp_server.schemas import DecisionReport, DecisionScenario, RiskLevel
-
+from thermal_mcp_server.schemas import DecisionScenario, RiskLevel
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _h100_scenario(**overrides) -> DecisionScenario:
     """H100 SXM reference scenario."""
@@ -31,6 +31,7 @@ def _h100_scenario(**overrides) -> DecisionScenario:
 # ---------------------------------------------------------------------------
 # Structural / contract tests
 # ---------------------------------------------------------------------------
+
 
 def test_report_always_has_blind_spots():
     """Blind spots must always be populated — never empty."""
@@ -77,6 +78,7 @@ def test_report_rendered_memo_contains_key_sections():
 # Feasibility and risk level tests
 # ---------------------------------------------------------------------------
 
+
 def test_report_feasible_h100_water():
     """Standard H100 + water should be feasible; Tj must be below target."""
     report = generate_decision_report(_h100_scenario())
@@ -116,6 +118,7 @@ def test_report_risk_low_with_large_margin_budget():
 # Determinism test
 # ---------------------------------------------------------------------------
 
+
 def test_report_deterministic():
     """Same scenario twice must produce identical numerical output."""
     scenario = _h100_scenario()
@@ -130,6 +133,7 @@ def test_report_deterministic():
 # ---------------------------------------------------------------------------
 # Margin propagation test
 # ---------------------------------------------------------------------------
+
 
 def test_report_margin_propagates():
     """Larger margin_c must require higher minimum flow (more conservative)."""
@@ -150,6 +154,7 @@ def test_report_zero_margin_equals_no_margin():
 # Fixed-flow mode
 # ---------------------------------------------------------------------------
 
+
 def test_report_fixed_flow_mode():
     """Providing flow_rate_lpm bypasses optimization."""
     report = generate_decision_report(_h100_scenario(flow_rate_lpm=8.0))
@@ -160,15 +165,14 @@ def test_report_fixed_flow_mode():
 
 def test_report_fixed_flow_infeasible():
     """Very low fixed flow with tight target → infeasible."""
-    report = generate_decision_report(
-        _h100_scenario(flow_rate_lpm=0.5, target_junction_temp_c=40.0, margin_c=0.0)
-    )
+    report = generate_decision_report(_h100_scenario(flow_rate_lpm=0.5, target_junction_temp_c=40.0, margin_c=0.0))
     assert report.feasible is False
 
 
 # ---------------------------------------------------------------------------
 # Multi-GPU topology tests
 # ---------------------------------------------------------------------------
+
 
 def test_report_rack_topology_populated():
     """Multi-GPU scenario must include topology recommendation text."""
@@ -199,6 +203,7 @@ def test_report_series_topology_rationale():
 # feasibility, risk, and margin once gpu_count > 1.
 # ---------------------------------------------------------------------------
 
+
 def test_report_series_rack_uses_rack_max_tj():
     """8-GPU series at the same per-GPU flow gives a higher Tj than 1-GPU.
     The rack-aware fix must surface that — Tj_at_recommended must reflect
@@ -228,12 +233,8 @@ def test_report_series_can_flip_feasibility_to_infeasible():
     """
     # Choose a target that single-coldplate just barely meets but 8-GPU series
     # cannot. H100 700W water 25°C inlet, target 80°C, margin 0.
-    single = generate_decision_report(
-        _h100_scenario(target_junction_temp_c=80.0, margin_c=0.0, gpu_count=1)
-    )
-    series_8 = generate_decision_report(
-        _h100_scenario(target_junction_temp_c=80.0, margin_c=0.0, gpu_count=8, topology="series")
-    )
+    single = generate_decision_report(_h100_scenario(target_junction_temp_c=80.0, margin_c=0.0, gpu_count=1))
+    series_8 = generate_decision_report(_h100_scenario(target_junction_temp_c=80.0, margin_c=0.0, gpu_count=8, topology="series"))
     assert single.feasible is True
     assert series_8.feasible is False
 
@@ -245,10 +246,10 @@ def test_report_extreme_series_does_not_crash():
     """
     report = generate_decision_report(
         _h100_scenario(
-            heat_load_w=1500.0,           # high TDP per GPU
-            gpu_count=64,                  # deep chain
+            heat_load_w=1500.0,  # high TDP per GPU
+            gpu_count=64,  # deep chain
             topology="series",
-            inlet_temp_c=60.0,             # already hot supply
+            inlet_temp_c=60.0,  # already hot supply
             target_junction_temp_c=83.0,
             margin_c=0.0,
         )
@@ -262,6 +263,7 @@ def test_report_extreme_series_does_not_crash():
 # ---------------------------------------------------------------------------
 # Flow band structure
 # ---------------------------------------------------------------------------
+
 
 def test_report_flow_band_ordering():
     """Flow band must satisfy min <= recommended <= max."""
@@ -281,6 +283,7 @@ def test_report_flow_band_basis_non_empty():
 # MCP layer (generate_decision_report_impl) contract tests
 # ---------------------------------------------------------------------------
 
+
 def test_mcp_impl_returns_dict():
     """MCP impl must return a dict (JSON-serialisable)."""
     result = generate_decision_report_impl(chip_label="H100 SXM", heat_load_w=700.0)
@@ -298,9 +301,7 @@ def test_mcp_impl_invalid_coolant():
 
 def test_mcp_impl_margin_exceeds_target():
     """margin_c >= target_junction_temp_c must return error dict."""
-    result = generate_decision_report_impl(
-        heat_load_w=700.0, target_junction_temp_c=50.0, margin_c=60.0
-    )
+    result = generate_decision_report_impl(heat_load_w=700.0, target_junction_temp_c=50.0, margin_c=60.0)
     assert "error" in result
 
 

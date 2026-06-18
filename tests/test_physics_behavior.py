@@ -65,32 +65,28 @@ def test_hand_calc_validation_700w_water():
       Coolant rise = 700/(997 * 1.667e-4 * 4180) = 1.008 C
       T_j = 25 + 0.504 + 700 * 0.15369 = 133.1 C
     """
-    result = analyze(AnalyzeColdplateInput(
-        heat_load_w=700,
-        flow_rate_lpm=10,
-        coolant="water",
-        inlet_temp_c=25.0,
-        r_jc_k_per_w=0.1,
-        r_tim_k_per_w=0.05,
-    ))
+    result = analyze(
+        AnalyzeColdplateInput(
+            heat_load_w=700,
+            flow_rate_lpm=10,
+            coolant="water",
+            inlet_temp_c=25.0,
+            r_jc_k_per_w=0.1,
+            r_tim_k_per_w=0.05,
+        )
+    )
 
     # Junction temperature: hand calc gives 133.1 C
-    assert abs(result.junction_temp_c - 133.1) < 1.0, (
-        f"Tj={result.junction_temp_c:.1f} C, expected ~133.1 C"
-    )
+    assert abs(result.junction_temp_c - 133.1) < 1.0, f"Tj={result.junction_temp_c:.1f} C, expected ~133.1 C"
 
     # Reynolds number: hand calc gives 4668
-    assert abs(result.reynolds - 4668) < 5, (
-        f"Re={result.reynolds:.0f}, expected ~4668"
-    )
+    assert abs(result.reynolds - 4668) < 5, f"Re={result.reynolds:.0f}, expected ~4668"
 
     # Regime should be turbulent (Re > 4000)
     assert result.regime == "turbulent"
 
     # Total thermal resistance: hand calc gives 0.15369 K/W
-    assert abs(result.resistances_k_per_w["total"] - 0.15369) < 0.001, (
-        f"R_total={result.resistances_k_per_w['total']:.5f}, expected ~0.15369"
-    )
+    assert abs(result.resistances_k_per_w["total"] - 0.15369) < 0.001, f"R_total={result.resistances_k_per_w['total']:.5f}, expected ~0.15369"
 
     # Coolant rise: hand calc gives 1.008 C
     assert abs(result.coolant_rise_c - 1.008) < 0.01
@@ -105,14 +101,10 @@ def test_hand_calc_validation_default_case():
     This is the 'typical GPU' case with R_jc=0.04, R_tim=0.02.
     Hand calc gives Tj ~ 70.9 C (within expected 65-85 C range).
     """
-    result = analyze(AnalyzeColdplateInput(
-        heat_load_w=700, flow_rate_lpm=8, coolant="water"
-    ))
+    result = analyze(AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, coolant="water"))
 
     # Junction temp should be in the 70-85 C range for a well-designed cold plate
-    assert 65 < result.junction_temp_c < 85, (
-        f"Tj={result.junction_temp_c:.1f} C, expected 70-85 C range"
-    )
+    assert 65 < result.junction_temp_c < 85, f"Tj={result.junction_temp_c:.1f} C, expected 70-85 C range"
 
     # Specifically, hand calc gives 70.9 C
     assert abs(result.junction_temp_c - 70.9) < 1.0
@@ -148,14 +140,16 @@ def test_rack_series_two_gpu_hand_calc():
     """
     single = analyze(AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, coolant="water"))
 
-    rack = analyze_rack(AnalyzeRackInput(
-        gpu_count=2,
-        topology="series",
-        heat_load_per_gpu_w=700.0,
-        total_flow_lpm=8.0,
-        cdu_supply_temp_c=25.0,
-        coolant="water",
-    ))
+    rack = analyze_rack(
+        AnalyzeRackInput(
+            gpu_count=2,
+            topology="series",
+            heat_load_per_gpu_w=700.0,
+            total_flow_lpm=8.0,
+            cdu_supply_temp_c=25.0,
+            coolant="water",
+        )
+    )
 
     # GPU 0 must match standalone analysis at 25°C inlet
     assert abs(rack.per_gpu_junction_temps_c[0] - single.junction_temp_c) < 0.01, (
@@ -164,9 +158,7 @@ def test_rack_series_two_gpu_hand_calc():
 
     # GPU 1 Tj = GPU 0 Tj + coolant_rise (exact relationship from algebra)
     expected_tj1 = rack.per_gpu_junction_temps_c[0] + single.coolant_rise_c
-    assert abs(rack.per_gpu_junction_temps_c[1] - expected_tj1) < 0.01, (
-        f"GPU 1 Tj={rack.per_gpu_junction_temps_c[1]:.2f}, expected {expected_tj1:.2f}"
-    )
+    assert abs(rack.per_gpu_junction_temps_c[1] - expected_tj1) < 0.01, f"GPU 1 Tj={rack.per_gpu_junction_temps_c[1]:.2f}, expected {expected_tj1:.2f}"
 
     # Hottest GPU is last in series
     assert rack.hottest_gpu_index == 1
@@ -174,9 +166,7 @@ def test_rack_series_two_gpu_hand_calc():
 
     # CDU outlet = supply + N × coolant_rise
     expected_outlet = 25.0 + 2.0 * single.coolant_rise_c
-    assert abs(rack.cdu_outlet_temp_c - expected_outlet) < 0.01, (
-        f"CDU outlet={rack.cdu_outlet_temp_c:.3f}, expected {expected_outlet:.3f}"
-    )
+    assert abs(rack.cdu_outlet_temp_c - expected_outlet) < 0.01, f"CDU outlet={rack.cdu_outlet_temp_c:.3f}, expected {expected_outlet:.3f}"
 
     # Total ΔP = 2 × single-plate ΔP
     assert abs(rack.total_pressure_drop_pa - 2.0 * single.pressure_drop_pa) < 0.1, (
@@ -207,20 +197,20 @@ def test_rack_parallel_two_gpu_hand_calc():
     """
     single = analyze(AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, coolant="water"))
 
-    rack = analyze_rack(AnalyzeRackInput(
-        gpu_count=2,
-        topology="parallel",
-        heat_load_per_gpu_w=700.0,
-        total_flow_lpm=16.0,  # 8 LPM per GPU
-        cdu_supply_temp_c=25.0,
-        coolant="water",
-    ))
+    rack = analyze_rack(
+        AnalyzeRackInput(
+            gpu_count=2,
+            topology="parallel",
+            heat_load_per_gpu_w=700.0,
+            total_flow_lpm=16.0,  # 8 LPM per GPU
+            cdu_supply_temp_c=25.0,
+            coolant="water",
+        )
+    )
 
     # All GPUs identical in parallel
     for i, tj in enumerate(rack.per_gpu_junction_temps_c):
-        assert abs(tj - single.junction_temp_c) < 0.01, (
-            f"GPU {i} Tj={tj:.2f}, expected {single.junction_temp_c:.2f}"
-        )
+        assert abs(tj - single.junction_temp_c) < 0.01, f"GPU {i} Tj={tj:.2f}, expected {single.junction_temp_c:.2f}"
 
     # System ΔP = per-branch ΔP (not cumulative)
     assert abs(rack.total_pressure_drop_pa - single.pressure_drop_pa) < 0.1, (
@@ -230,9 +220,7 @@ def test_rack_parallel_two_gpu_hand_calc():
     # CDU outlet from energy balance
     m_dot_total = (16.0 / 1000.0 / 60.0) * 997.0
     expected_outlet = 25.0 + 1400.0 / (m_dot_total * 4180.0)
-    assert abs(rack.cdu_outlet_temp_c - expected_outlet) < 0.01, (
-        f"CDU outlet={rack.cdu_outlet_temp_c:.3f}, expected {expected_outlet:.3f}"
-    )
+    assert abs(rack.cdu_outlet_temp_c - expected_outlet) < 0.01, f"CDU outlet={rack.cdu_outlet_temp_c:.3f}, expected {expected_outlet:.3f}"
 
     # CDU outlet = supply + 1 × single coolant_rise (energy balance simplification)
     assert abs(rack.cdu_outlet_temp_c - (25.0 + single.coolant_rise_c)) < 0.01
@@ -242,15 +230,20 @@ def test_rack_parallel_two_gpu_hand_calc():
 
 def test_rack_series_topology_invariants():
     """In series: Tj increases monotonically, CDU outlet increases with GPU count."""
-    rack_4 = analyze_rack(AnalyzeRackInput(
-        gpu_count=4, topology="series", heat_load_per_gpu_w=700,
-        total_flow_lpm=8.0, cdu_supply_temp_c=25.0,
-    ))
+    rack_4 = analyze_rack(
+        AnalyzeRackInput(
+            gpu_count=4,
+            topology="series",
+            heat_load_per_gpu_w=700,
+            total_flow_lpm=8.0,
+            cdu_supply_temp_c=25.0,
+        )
+    )
 
     # Tj monotonically increases along the chain
     tjs = rack_4.per_gpu_junction_temps_c
     for i in range(1, len(tjs)):
-        assert tjs[i] > tjs[i - 1], f"Tj not monotonic: GPU {i-1}={tjs[i-1]:.2f}, GPU {i}={tjs[i]:.2f}"
+        assert tjs[i] > tjs[i - 1], f"Tj not monotonic: GPU {i - 1}={tjs[i - 1]:.2f}, GPU {i}={tjs[i]:.2f}"
 
     # Hottest GPU is always last
     assert rack_4.hottest_gpu_index == 3
@@ -263,15 +256,25 @@ def test_rack_series_topology_invariants():
 def test_rack_parallel_vs_series_tradeoff():
     """Parallel has lower Tj but higher pump power than series at same per-GPU flow."""
     # Series: 8 LPM through all GPUs (8 LPM per GPU)
-    series = analyze_rack(AnalyzeRackInput(
-        gpu_count=4, topology="series", heat_load_per_gpu_w=700,
-        total_flow_lpm=8.0, cdu_supply_temp_c=25.0,
-    ))
+    series = analyze_rack(
+        AnalyzeRackInput(
+            gpu_count=4,
+            topology="series",
+            heat_load_per_gpu_w=700,
+            total_flow_lpm=8.0,
+            cdu_supply_temp_c=25.0,
+        )
+    )
     # Parallel: 32 LPM total → 8 LPM per GPU (same per-GPU hydraulics)
-    parallel = analyze_rack(AnalyzeRackInput(
-        gpu_count=4, topology="parallel", heat_load_per_gpu_w=700,
-        total_flow_lpm=32.0, cdu_supply_temp_c=25.0,
-    ))
+    parallel = analyze_rack(
+        AnalyzeRackInput(
+            gpu_count=4,
+            topology="parallel",
+            heat_load_per_gpu_w=700,
+            total_flow_lpm=32.0,
+            cdu_supply_temp_c=25.0,
+        )
+    )
 
     # Parallel max Tj < series max Tj (coolant temperature stacking eliminated)
     assert parallel.max_junction_temp_c < series.max_junction_temp_c, (
@@ -284,22 +287,26 @@ def test_rack_parallel_vs_series_tradeoff():
 
 def test_rack_chilled_supply_defaults_ambient_to_cdu_supply():
     """Low CDU supply temperatures should not fail when ambient is omitted."""
-    series = analyze_rack(AnalyzeRackInput(
-        gpu_count=2,
-        topology="series",
-        heat_load_per_gpu_w=700.0,
-        total_flow_lpm=8.0,
-        cdu_supply_temp_c=-10.0,
-        coolant="water",
-    ))
-    parallel = analyze_rack(AnalyzeRackInput(
-        gpu_count=2,
-        topology="parallel",
-        heat_load_per_gpu_w=700.0,
-        total_flow_lpm=16.0,
-        cdu_supply_temp_c=-10.0,
-        coolant="water",
-    ))
+    series = analyze_rack(
+        AnalyzeRackInput(
+            gpu_count=2,
+            topology="series",
+            heat_load_per_gpu_w=700.0,
+            total_flow_lpm=8.0,
+            cdu_supply_temp_c=-10.0,
+            coolant="water",
+        )
+    )
+    parallel = analyze_rack(
+        AnalyzeRackInput(
+            gpu_count=2,
+            topology="parallel",
+            heat_load_per_gpu_w=700.0,
+            total_flow_lpm=16.0,
+            cdu_supply_temp_c=-10.0,
+            coolant="water",
+        )
+    )
 
     assert len(series.per_gpu_junction_temps_c) == 2
     assert len(parallel.per_gpu_junction_temps_c) == 2
@@ -309,15 +316,17 @@ def test_rack_chilled_supply_defaults_ambient_to_cdu_supply():
 
 def test_rack_explicit_ambient_passthrough():
     """Rack ambient should be passed through to per-GPU cold plate inputs."""
-    rack = analyze_rack(AnalyzeRackInput(
-        gpu_count=2,
-        topology="parallel",
-        heat_load_per_gpu_w=700.0,
-        total_flow_lpm=16.0,
-        cdu_supply_temp_c=25.0,
-        ambient_temp_c=10.0,
-        coolant="water",
-    ))
+    rack = analyze_rack(
+        AnalyzeRackInput(
+            gpu_count=2,
+            topology="parallel",
+            heat_load_per_gpu_w=700.0,
+            total_flow_lpm=16.0,
+            cdu_supply_temp_c=25.0,
+            ambient_temp_c=10.0,
+            coolant="water",
+        )
+    )
 
     assert len(rack.per_gpu_junction_temps_c) == 2
     assert all(tj > 25.0 for tj in rack.per_gpu_junction_temps_c)
@@ -326,6 +335,7 @@ def test_rack_explicit_ambient_passthrough():
 # ---------------------------------------------------------------------------
 # Sensitivity tests
 # ---------------------------------------------------------------------------
+
 
 def test_sensitivity_dtj_dq_hand_calc():
     """∂Tj/∂Q must equal (0.5/(m_dot*cp) + R_total).
@@ -346,9 +356,7 @@ def test_sensitivity_dtj_dq_hand_calc():
 
     # Analytical: ∂Tj/∂Q = (Tj - T_inlet) / Q (since Tj linear in Q, fixed flow)
     expected = (result.junction_temp_c - inp.inlet_temp_c) / inp.heat_load_w
-    assert abs(sens.dtj_dq_c_per_w - expected) < 1e-4, (
-        f"dtj_dq={sens.dtj_dq_c_per_w:.6f}, expected ≈{expected:.6f}"
-    )
+    assert abs(sens.dtj_dq_c_per_w - expected) < 1e-4, f"dtj_dq={sens.dtj_dq_c_per_w:.6f}, expected ≈{expected:.6f}"
 
 
 def test_sensitivity_dtj_dr_tim_equals_heat_load():
@@ -356,18 +364,14 @@ def test_sensitivity_dtj_dr_tim_equals_heat_load():
     for q in (400.0, 700.0, 1200.0):
         inp = AnalyzeColdplateInput(heat_load_w=q, flow_rate_lpm=8)
         sens = compute_sensitivity(inp)
-        assert abs(sens.dtj_dr_tim_c_per_kw - q) < 0.1, (
-            f"Q={q}: dtj_dr_tim={sens.dtj_dr_tim_c_per_kw:.2f}, expected {q}"
-        )
+        assert abs(sens.dtj_dr_tim_c_per_kw - q) < 0.1, f"Q={q}: dtj_dr_tim={sens.dtj_dr_tim_c_per_kw:.2f}, expected {q}"
 
 
 def test_sensitivity_dtj_dt_inlet_is_one():
     """∂Tj/∂T_inlet must be 1.0 (R_conv and coolant_rise do not depend on inlet temp)."""
     inp = AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8)
     sens = compute_sensitivity(inp)
-    assert abs(sens.dtj_dt_inlet_dimensionless - 1.0) < 1e-4, (
-        f"dtj_dt_inlet={sens.dtj_dt_inlet_dimensionless:.6f}, expected 1.0"
-    )
+    assert abs(sens.dtj_dt_inlet_dimensionless - 1.0) < 1e-4, f"dtj_dt_inlet={sens.dtj_dt_inlet_dimensionless:.6f}, expected 1.0"
 
 
 def test_sensitivity_r_jc_uncertainty_hand_calc():
@@ -378,9 +382,7 @@ def test_sensitivity_r_jc_uncertainty_hand_calc():
     inp = AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, r_jc_k_per_w=0.04)
     sens = compute_sensitivity(inp)
     expected_pm = 0.20 * 0.04 * 700  # = 5.6°C
-    assert abs(sens.r_jc_uncertainty_pm_c - expected_pm) < 0.01, (
-        f"r_jc_unc={sens.r_jc_uncertainty_pm_c:.3f}, expected {expected_pm:.3f}"
-    )
+    assert abs(sens.r_jc_uncertainty_pm_c - expected_pm) < 0.01, f"r_jc_unc={sens.r_jc_uncertainty_pm_c:.3f}, expected {expected_pm:.3f}"
 
 
 def test_sensitivity_r_tim_aged_hand_calc():
@@ -391,9 +393,7 @@ def test_sensitivity_r_tim_aged_hand_calc():
     inp = AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, r_tim_k_per_w=0.02)
     sens = compute_sensitivity(inp)
     expected_delta = 0.02 * 700  # = 14.0°C (R_tim doubles → Q * R_tim_orig extra)
-    assert abs(sens.r_tim_aged_delta_c - expected_delta) < 0.01, (
-        f"r_tim_aged_delta={sens.r_tim_aged_delta_c:.3f}, expected {expected_delta:.3f}"
-    )
+    assert abs(sens.r_tim_aged_delta_c - expected_delta) < 0.01, f"r_tim_aged_delta={sens.r_tim_aged_delta_c:.3f}, expected {expected_delta:.3f}"
 
 
 def test_sensitivity_not_returned_by_default():
@@ -406,21 +406,15 @@ def test_sensitivity_not_returned_by_default():
 # margin_c tests
 # ---------------------------------------------------------------------------
 
+
 def test_optimize_margin_c_increases_flow():
     """Adding a margin must require higher flow (more conservative target)."""
-    inp_no_margin = OptimizeFlowRateInput(
-        heat_load_w=700, max_junction_temp_c=75, margin_c=0.0, coolant="water"
-    )
-    inp_margin = OptimizeFlowRateInput(
-        heat_load_w=700, max_junction_temp_c=75, margin_c=5.0, coolant="water"
-    )
+    inp_no_margin = OptimizeFlowRateInput(heat_load_w=700, max_junction_temp_c=75, margin_c=0.0, coolant="water")
+    inp_margin = OptimizeFlowRateInput(heat_load_w=700, max_junction_temp_c=75, margin_c=5.0, coolant="water")
     flow_no_margin, result_no = optimize_flow(inp_no_margin)
     flow_with_margin, result_with = optimize_flow(inp_margin)
 
-    assert flow_with_margin > flow_no_margin, (
-        f"With 5°C margin, flow ({flow_with_margin:.2f} LPM) should exceed "
-        f"no-margin flow ({flow_no_margin:.2f} LPM)"
-    )
+    assert flow_with_margin > flow_no_margin, f"With 5°C margin, flow ({flow_with_margin:.2f} LPM) should exceed no-margin flow ({flow_no_margin:.2f} LPM)"
     # The margin result must satisfy effective_target = 75 - 5 = 70°C
     if result_with is not None:
         assert result_with.junction_temp_c <= 70.0 + 0.01
@@ -438,8 +432,6 @@ def test_optimize_margin_c_zero_equals_no_margin():
 def test_optimize_margin_c_infeasible():
     """margin_c that makes the effective target unachievable returns met_target=False."""
     # Effective target = 70 - 60 = 10°C, physically impossible with 25°C inlet
-    inp = OptimizeFlowRateInput(
-        heat_load_w=700, max_junction_temp_c=70, margin_c=60.0, coolant="water"
-    )
+    inp = OptimizeFlowRateInput(heat_load_w=700, max_junction_temp_c=70, margin_c=60.0, coolant="water")
     flow, result = optimize_flow(inp)
     assert result is None

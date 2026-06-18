@@ -14,10 +14,10 @@ from dataclasses import dataclass
 from thermal_mcp_server.physics import COOLANTS, analyze, optimize_flow
 from thermal_mcp_server.schemas import AnalyzeColdplateInput, OptimizeFlowRateInput
 
-
 # ---------------------------------------------------------------------------
 # Chip specs — verified against vendor datasheets
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class ChipSpec:
@@ -46,6 +46,7 @@ ALL_CHIPS = [H100_SXM, B200_NVL72, MI300X, GAUDI3_AIR, GAUDI3_LIQUID]
 # Benchmark 1: H100 SXM — Minimum flow rate sizing
 # ---------------------------------------------------------------------------
 
+
 def benchmark_h100_flow_sweep() -> dict[str, object]:
     """Sweep flow rates to find the minimum that keeps Tj < 83°C.
 
@@ -67,21 +68,25 @@ def benchmark_h100_flow_sweep() -> dict[str, object]:
     results: list[dict[str, float]] = []
 
     for lpm in flow_rates:
-        result = analyze(AnalyzeColdplateInput(
-            heat_load_w=chip.tdp_w,
-            flow_rate_lpm=float(lpm),
-            inlet_temp_c=inlet_c,
-            coolant="water",
-        ))
+        result = analyze(
+            AnalyzeColdplateInput(
+                heat_load_w=chip.tdp_w,
+                flow_rate_lpm=float(lpm),
+                inlet_temp_c=inlet_c,
+                coolant="water",
+            )
+        )
         status = "OK" if result.junction_temp_c < chip.tj_limit_c else "OVER"
         if status == "OK" and min_flow is None:
             min_flow = float(lpm)
         print(f"  {lpm:>12}  {result.junction_temp_c:>10.1f}  {result.pressure_drop_pa / 1000:>10.1f}  {status:>10}")
-        results.append({
-            "flow_lpm": float(lpm),
-            "tj_c": result.junction_temp_c,
-            "dp_kpa": result.pressure_drop_pa / 1000,
-        })
+        results.append(
+            {
+                "flow_lpm": float(lpm),
+                "tj_c": result.junction_temp_c,
+                "dp_kpa": result.pressure_drop_pa / 1000,
+            }
+        )
 
     print("-" * 72)
     if min_flow is not None:
@@ -96,6 +101,7 @@ def benchmark_h100_flow_sweep() -> dict[str, object]:
 # ---------------------------------------------------------------------------
 # Benchmark 2: GB200 (NVL72) — Coolant comparison
 # ---------------------------------------------------------------------------
+
 
 def benchmark_b200_coolant_comparison() -> dict[str, object]:
     """Compare water vs 50% glycol for a B200 at NVL72 power level.
@@ -122,18 +128,16 @@ def benchmark_b200_coolant_comparison() -> dict[str, object]:
     comparison: dict[str, dict[str, float]] = {}
 
     for coolant_name in COOLANTS:
-        result = analyze(AnalyzeColdplateInput(
-            heat_load_w=chip.tdp_w,
-            flow_rate_lpm=flow_lpm,
-            inlet_temp_c=inlet_c,
-            coolant=coolant_name,
-        ))
+        result = analyze(
+            AnalyzeColdplateInput(
+                heat_load_w=chip.tdp_w,
+                flow_rate_lpm=flow_lpm,
+                inlet_temp_c=inlet_c,
+                coolant=coolant_name,
+            )
+        )
         print(
-            f"  {coolant_name:>16}  "
-            f"{result.junction_temp_c:>10.1f}  "
-            f"{result.pressure_drop_pa / 1000:>10.1f}  "
-            f"{result.pump_power_w:>10.2f}  "
-            f"{result.regime:>12}"
+            f"  {coolant_name:>16}  {result.junction_temp_c:>10.1f}  {result.pressure_drop_pa / 1000:>10.1f}  {result.pump_power_w:>10.2f}  {result.regime:>12}"
         )
         comparison[coolant_name] = {
             "tj_c": result.junction_temp_c,
@@ -147,8 +151,7 @@ def benchmark_b200_coolant_comparison() -> dict[str, object]:
     dp_glycol = comparison["glycol50"]["dp_kpa"]
 
     print("-" * 72)
-    print(f"  Glycol penalty: +{tj_glycol - tj_water:.1f}°C junction temp, "
-          f"+{dp_glycol - dp_water:.1f} kPa pressure drop")
+    print(f"  Glycol penalty: +{tj_glycol - tj_water:.1f}°C junction temp, +{dp_glycol - dp_water:.1f} kPa pressure drop")
     print()
 
     return {"chip": chip.name, "comparison": comparison}
@@ -157,6 +160,7 @@ def benchmark_b200_coolant_comparison() -> dict[str, object]:
 # ---------------------------------------------------------------------------
 # Benchmark 3: MI300X — Inlet temperature sensitivity
 # ---------------------------------------------------------------------------
+
 
 def benchmark_mi300x_inlet_sweep() -> dict[str, object]:
     """Sweep inlet temperature to find the maximum allowable CDU setpoint.
@@ -183,37 +187,35 @@ def benchmark_mi300x_inlet_sweep() -> dict[str, object]:
     results: list[dict[str, float]] = []
 
     for inlet_c in inlet_temps:
-        result = analyze(AnalyzeColdplateInput(
-            heat_load_w=chip.tdp_w,
-            flow_rate_lpm=flow_lpm,
-            inlet_temp_c=float(inlet_c),
-            coolant="water",
-        ))
+        result = analyze(
+            AnalyzeColdplateInput(
+                heat_load_w=chip.tdp_w,
+                flow_rate_lpm=flow_lpm,
+                inlet_temp_c=float(inlet_c),
+                coolant="water",
+            )
+        )
         margin = chip.tj_limit_c - result.junction_temp_c
         status = "OK" if margin > 0 else "EXCEEDS"
         if margin <= 0:
             status = "EXCEEDS"
         elif margin < 3:
             status = "TIGHT"
-        print(
-            f"  {inlet_c:>12}  "
-            f"{result.junction_temp_c:>10.1f}  "
-            f"{margin:>12.1f}  "
-            f"{status:>10}"
+        print(f"  {inlet_c:>12}  {result.junction_temp_c:>10.1f}  {margin:>12.1f}  {status:>10}")
+        results.append(
+            {
+                "inlet_c": float(inlet_c),
+                "tj_c": result.junction_temp_c,
+                "margin_c": margin,
+            }
         )
-        results.append({
-            "inlet_c": float(inlet_c),
-            "tj_c": result.junction_temp_c,
-            "margin_c": margin,
-        })
 
     print("-" * 72)
     # Find max inlet temp that stays under limit
     safe_inlets = [r for r in results if r["margin_c"] > 0]
     if safe_inlets:
         max_safe = safe_inlets[-1]
-        print(f"  Max safe inlet temp: {max_safe['inlet_c']:.0f}°C "
-              f"(Tj = {max_safe['tj_c']:.1f}°C, margin = {max_safe['margin_c']:.1f}°C)")
+        print(f"  Max safe inlet temp: {max_safe['inlet_c']:.0f}°C (Tj = {max_safe['tj_c']:.1f}°C, margin = {max_safe['margin_c']:.1f}°C)")
     over_inlets = [r for r in results if r["margin_c"] <= 0]
     if over_inlets:
         print(f"  Tj exceeds {chip.tj_limit_c}°C at inlet >= {over_inlets[0]['inlet_c']:.0f}°C")
@@ -225,6 +227,7 @@ def benchmark_mi300x_inlet_sweep() -> dict[str, object]:
 # ---------------------------------------------------------------------------
 # Benchmark 4: Gaudi 3 OAM — Flow rate optimization (air vs liquid TDP)
 # ---------------------------------------------------------------------------
+
 
 def benchmark_gaudi3_flow_optimization() -> dict[str, object]:
     """Find minimum flow rate for Gaudi 3 at both air-cooled and liquid-cooled TDP.
@@ -263,9 +266,11 @@ def benchmark_gaudi3_flow_optimization() -> dict[str, object]:
         _, result = optimize_flow(opt_input)
         # At 30°C inlet, R_fixed × TDP ≈ 55–73°C rise → cannot meet 85°C
         print(f"  {chip.name} ({chip.tdp_w:.0f}W):")
-        print(f"    Cannot meet {tj_limit}°C — min ΔTj from R_fixed alone = "
-              f"{chip.tdp_w * 0.061:.0f}°C (+ {inlet_30}°C inlet = "
-              f"{inlet_30 + chip.tdp_w * 0.061:.0f}°C min)")
+        print(
+            f"    Cannot meet {tj_limit}°C — min ΔTj from R_fixed alone = "
+            f"{chip.tdp_w * 0.061:.0f}°C (+ {inlet_30}°C inlet = "
+            f"{inlet_30 + chip.tdp_w * 0.061:.0f}°C min)"
+        )
 
     # --- Part B: 25°C inlet (typical cold-climate / well-provisioned CDU) ---
     inlet_25 = 25.0
@@ -303,7 +308,7 @@ def benchmark_gaudi3_flow_optimization() -> dict[str, object]:
         else:
             print(f"  {chip.name} ({chip.tdp_w:.0f}W):")
             print(f"    Cannot meet {tj_limit}°C even at {inlet_25}°C inlet")
-            print(f"    Cold plate redesign required for this power class")
+            print("    Cold plate redesign required for this power class")
             configs[chip.name] = {"tdp_w": chip.tdp_w, "min_flow_lpm": None}
 
     air = configs.get("Gaudi 3 OAM (air)", {})
@@ -313,15 +318,15 @@ def benchmark_gaudi3_flow_optimization() -> dict[str, object]:
 
     print()
     if air_flow is not None and liq_flow is not None:
-        print(f"  At {inlet_25}°C inlet, liquid-cooled OAM requires "
-              f"+{liq_flow - air_flow:.1f} LPM "
-              f"({liq_flow:.1f} vs {air_flow:.1f} LPM) "
-              f"for +{liq['tdp_w'] - air['tdp_w']:.0f} W additional TDP")
+        print(
+            f"  At {inlet_25}°C inlet, liquid-cooled OAM requires "
+            f"+{liq_flow - air_flow:.1f} LPM "
+            f"({liq_flow:.1f} vs {air_flow:.1f} LPM) "
+            f"for +{liq['tdp_w'] - air['tdp_w']:.0f} W additional TDP"
+        )
     elif air_flow is not None and liq_flow is None:
-        print(f"  At {inlet_25}°C inlet, air-cooled OAM ({GAUDI3_AIR.tdp_w:.0f}W) "
-              f"needs {air_flow:.1f} LPM with default geometry.")
-        print(f"  Liquid-cooled OAM ({GAUDI3_LIQUID.tdp_w:.0f}W) still exceeds "
-              f"what this cold plate geometry can handle — redesign needed.")
+        print(f"  At {inlet_25}°C inlet, air-cooled OAM ({GAUDI3_AIR.tdp_w:.0f}W) needs {air_flow:.1f} LPM with default geometry.")
+        print(f"  Liquid-cooled OAM ({GAUDI3_LIQUID.tdp_w:.0f}W) still exceeds what this cold plate geometry can handle — redesign needed.")
     elif air_flow is None and liq_flow is None:
         print(f"  Neither variant achievable at {inlet_25}°C with default geometry.")
         print("  Cold plate redesign required for 900W+ class GPUs.")
@@ -333,6 +338,7 @@ def benchmark_gaudi3_flow_optimization() -> dict[str, object]:
 # ---------------------------------------------------------------------------
 # Summary table
 # ---------------------------------------------------------------------------
+
 
 def print_summary() -> None:
     """Print a summary table across all chips at their optimal operating points.
@@ -348,10 +354,7 @@ def print_summary() -> None:
     print("Summary: All Chips at Minimum Flow Rate for Tj < Tj_limit")
     print(f"  Coolant: water | Inlet: {inlet_c}°C | Default cold plate geometry")
     print("-" * 72)
-    print(
-        f"  {'Chip':<22}  {'TDP (W)':>8}  {'Tj Lim':>7}  "
-        f"{'Min Flow':>9}  {'Tj (°C)':>8}  {'ΔP (kPa)':>9}"
-    )
+    print(f"  {'Chip':<22}  {'TDP (W)':>8}  {'Tj Lim':>7}  {'Min Flow':>9}  {'Tj (°C)':>8}  {'ΔP (kPa)':>9}")
     print("-" * 72)
 
     for chip in ALL_CHIPS:
@@ -372,10 +375,7 @@ def print_summary() -> None:
                 f"{result.pressure_drop_pa / 1000:>9.1f}"
             )
         else:
-            print(
-                f"  {chip.name:<22}  {chip.tdp_w:>8.0f}  {chip.tj_limit_c:>6.0f}°  "
-                f"{'redesign':>9}  {'N/A':>8}  {'N/A':>9}"
-            )
+            print(f"  {chip.name:<22}  {chip.tdp_w:>8.0f}  {chip.tj_limit_c:>6.0f}°  {'redesign':>9}  {'N/A':>8}  {'N/A':>9}")
 
     print("-" * 72)
     print("  'redesign' = default cold plate geometry cannot meet target at any flow rate.")

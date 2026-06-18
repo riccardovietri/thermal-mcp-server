@@ -127,6 +127,25 @@ Verification:
 - `uv run python examples/rack_sizing_example.py` passed.
 - `rg -n -i "portfolio|cleanup" ...` returned no matches.
 
+### Ruff and CI gate
+
+Changed:
+
+- Add Ruff to pip and uv dev dependencies.
+- Add conservative Ruff config in `pyproject.toml`.
+- Update CI to run tests, Ruff, smoke examples, and build.
+- Applied `ruff check --fix .` and `ruff format .` once to make the new gate
+  pass on existing active Python files.
+
+Verification:
+
+- `uv run pytest` passed: `74 passed in 0.97s`.
+- `uv build` passed.
+- `uv run python examples/quickstart.py` passed.
+- `uv run python examples/rack_sizing_example.py` passed.
+- `uv run ruff check .` passed.
+- `uv run ruff format --check .` passed.
+
 ## Open Questions For Morning Review
 
 - Whether `_attic/` should stay in the repository long term or only serve this

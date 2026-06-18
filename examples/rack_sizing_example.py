@@ -9,7 +9,6 @@ from __future__ import annotations
 from thermal_mcp_server.physics import analyze_rack
 from thermal_mcp_server.schemas import AnalyzeRackInput
 
-
 GPU_COUNT = 8
 HEAT_LOAD_PER_GPU_W = 700.0
 TJ_LIMIT_C = 83.0
@@ -18,9 +17,7 @@ CDU_SUPPLY_C = 25.0
 
 
 def _run(topology: str) -> object:
-    total_flow_lpm = (
-        PER_GPU_FLOW_LPM if topology == "series" else PER_GPU_FLOW_LPM * GPU_COUNT
-    )
+    total_flow_lpm = PER_GPU_FLOW_LPM if topology == "series" else PER_GPU_FLOW_LPM * GPU_COUNT
     return analyze_rack(
         AnalyzeRackInput(
             gpu_count=GPU_COUNT,
@@ -47,9 +44,7 @@ def main() -> None:
 
     for name, result in (("series", series), ("parallel", parallel)):
         margin_c = TJ_LIMIT_C - result.max_junction_temp_c
-        total_flow_lpm = (
-            PER_GPU_FLOW_LPM if name == "series" else PER_GPU_FLOW_LPM * GPU_COUNT
-        )
+        total_flow_lpm = PER_GPU_FLOW_LPM if name == "series" else PER_GPU_FLOW_LPM * GPU_COUNT
         print(
             f"{name:<11} {total_flow_lpm:>7.1f} LPM"
             f" {result.max_junction_temp_c:>7.1f} C"

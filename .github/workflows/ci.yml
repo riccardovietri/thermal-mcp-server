@@ -14,5 +14,13 @@ jobs:
         run: uv sync --group dev
       - name: Test
         run: uv run pytest -q
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format
+        run: uv run ruff format --check .
+      - name: Smoke examples
+        run: |
+          uv run python examples/quickstart.py
+          uv run python examples/rack_sizing_example.py
       - name: Build
         run: uv build

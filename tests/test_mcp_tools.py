@@ -12,10 +12,10 @@ No new physics here — correctness is covered in test_physics_behavior.py.
 
 from thermal_mcp_server import mcp_server
 
-
 # ---------------------------------------------------------------------------
 # analyze_coldplate_impl
 # ---------------------------------------------------------------------------
+
 
 def test_analyze_tool_shape():
     out = mcp_server.analyze_coldplate_impl(heat_load_w=700, flow_rate_lpm=8, coolant="water")
@@ -67,6 +67,7 @@ def test_analyze_coldplate_geometry_extra_key_rejected():
 # compare_coolants_impl
 # ---------------------------------------------------------------------------
 
+
 def test_compare_tool_shape():
     out = mcp_server.compare_coolants_impl(heat_load_w=700, flow_rate_lpm=8)
     assert set(out["results"].keys()) == {"water", "glycol50"}
@@ -108,6 +109,7 @@ def test_compare_coolants_inputs_echoed():
 # ---------------------------------------------------------------------------
 # optimize_flow_rate_impl
 # ---------------------------------------------------------------------------
+
 
 def test_optimize_tool_shape():
     out = mcp_server.optimize_flow_rate_impl(heat_load_w=700, max_junction_temp_c=85, coolant="water")
@@ -157,6 +159,7 @@ def test_optimize_target_echoed():
 # ---------------------------------------------------------------------------
 # analyze_rack_impl
 # ---------------------------------------------------------------------------
+
 
 def test_analyze_rack_smoke_series():
     """Basic series rack: output keys and types correct."""
@@ -231,9 +234,7 @@ def test_analyze_rack_series_hot_inlet_returns_error():
 
 def test_analyze_rack_geometry_passthrough():
     """Non-default geometry propagates into rack analysis (different Re → different Tj)."""
-    default_out = mcp_server.analyze_rack_impl(
-        gpu_count=4, topology="parallel", heat_load_per_gpu_w=700, total_flow_lpm=32
-    )
+    default_out = mcp_server.analyze_rack_impl(gpu_count=4, topology="parallel", heat_load_per_gpu_w=700, total_flow_lpm=32)
     custom_out = mcp_server.analyze_rack_impl(
         gpu_count=4,
         topology="parallel",
