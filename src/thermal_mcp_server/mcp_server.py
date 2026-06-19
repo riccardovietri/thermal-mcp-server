@@ -151,8 +151,15 @@ def analyze_coldplate(
     and Tj rise from TIM pump-out degradation (R_tim doubles after 2-3 years).
     """
     return analyze_coldplate_impl(
-        heat_load_w, flow_rate_lpm, inlet_temp_c, ambient_temp_c,
-        coolant, r_jc_k_per_w, r_tim_k_per_w, geometry, sensitivity,
+        heat_load_w,
+        flow_rate_lpm,
+        inlet_temp_c,
+        ambient_temp_c,
+        coolant,
+        r_jc_k_per_w,
+        r_tim_k_per_w,
+        geometry,
+        sensitivity,
     )
 
 
@@ -172,8 +179,13 @@ def compare_coolants(
     including junction temperature, pressure drop, and pump power for each.
     """
     return compare_coolants_impl(
-        heat_load_w, flow_rate_lpm, inlet_temp_c, ambient_temp_c,
-        r_jc_k_per_w, r_tim_k_per_w, geometry,
+        heat_load_w,
+        flow_rate_lpm,
+        inlet_temp_c,
+        ambient_temp_c,
+        r_jc_k_per_w,
+        r_tim_k_per_w,
+        geometry,
     )
 
 
@@ -203,9 +215,17 @@ def optimize_flow_rate(
     and TIM degradation over 2-3 years of field service.
     """
     return optimize_flow_rate_impl(
-        heat_load_w, max_junction_temp_c, coolant, inlet_temp_c,
-        ambient_temp_c, flow_min_lpm, flow_max_lpm,
-        r_jc_k_per_w, r_tim_k_per_w, geometry, margin_c,
+        heat_load_w,
+        max_junction_temp_c,
+        coolant,
+        inlet_temp_c,
+        ambient_temp_c,
+        flow_min_lpm,
+        flow_max_lpm,
+        r_jc_k_per_w,
+        r_tim_k_per_w,
+        geometry,
+        margin_c,
     )
 
 
@@ -289,8 +309,16 @@ def analyze_rack_tool(
         geometry: Optional cold plate geometry overrides (same for all GPUs).
     """
     return analyze_rack_impl(
-        gpu_count, topology, heat_load_per_gpu_w, total_flow_lpm,
-        cdu_supply_temp_c, ambient_temp_c, coolant, r_jc_k_per_w, r_tim_k_per_w, geometry,
+        gpu_count,
+        topology,
+        heat_load_per_gpu_w,
+        total_flow_lpm,
+        cdu_supply_temp_c,
+        ambient_temp_c,
+        coolant,
+        r_jc_k_per_w,
+        r_tim_k_per_w,
+        geometry,
     )
 
 
@@ -376,9 +404,18 @@ def generate_decision_report_tool(
         r_tim_k_per_w: TIM resistance in K/W.
     """
     return generate_decision_report_impl(
-        chip_label, heat_load_w, gpu_count, topology, target_junction_temp_c,
-        margin_c, coolant, inlet_temp_c, flow_rate_lpm, geometry,
-        r_jc_k_per_w, r_tim_k_per_w,
+        chip_label,
+        heat_load_w,
+        gpu_count,
+        topology,
+        target_junction_temp_c,
+        margin_c,
+        coolant,
+        inlet_temp_c,
+        flow_rate_lpm,
+        geometry,
+        r_jc_k_per_w,
+        r_tim_k_per_w,
     )
 
 

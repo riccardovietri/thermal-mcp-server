@@ -11,7 +11,7 @@ Questions answered:
   3. What does the CDU farm look like (count, flow, heat rejection)?
   4. How does electricity cost compare for water vs. glycol50 cooling?
 
-Run: python examples/ai_factory_cooling_budget.py
+Run: python _attic/ai_factory_cooling_budget.py
 
 Financial assumptions (adjust for your facility):
   - Electricity: $0.08/kWh (US data center average, 2025)

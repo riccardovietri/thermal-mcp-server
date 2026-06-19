@@ -32,7 +32,7 @@ DIVIDER = "\n" + "=" * 72 + "\n"
 H100_BASE = dict(
     chip_label="H100 SXM",
     heat_load_w=700.0,
-    r_jc_k_per_w=0.04,   # engineering estimate
+    r_jc_k_per_w=0.04,  # engineering estimate
     r_tim_k_per_w=0.02,  # engineering estimate
     target_junction_temp_c=83.0,
     margin_c=5.0,
@@ -108,6 +108,7 @@ def scenario_b200_proxy() -> None:
 # Scenario 3: H100 coolant trade study — water vs glycol50, single GPU
 # Same chip and conditions; compare recommended flow, Tj, risk level.
 # ---------------------------------------------------------------------------
+
 
 def scenario_h100_coolant_trade_study() -> None:
     print(DIVIDER)

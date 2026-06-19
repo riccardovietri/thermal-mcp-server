@@ -32,15 +32,14 @@ from thermal_mcp_server.schemas import (
     OptimizeFlowRateInput,
 )
 
-
 # ---------------------------------------------------------------------------
 # B200 parameters
 # ---------------------------------------------------------------------------
 
 B200_TDP_W = 1200.0
-B200_TJ_LIMIT_C = 75.0      # SemiAnalysis estimate; not NVIDIA-published
-B200_R_JC = 0.02             # K/W — engineering estimate; see module docstring
-B200_R_TIM = 0.015           # K/W — better TIM assumed for high-TDP package
+B200_TJ_LIMIT_C = 75.0  # SemiAnalysis estimate; not NVIDIA-published
+B200_R_JC = 0.02  # K/W — engineering estimate; see module docstring
+B200_R_TIM = 0.015  # K/W — better TIM assumed for high-TDP package
 NVL72_GPU_COUNT = 72
 
 # High-performance cold plate geometry for B200 TDP
@@ -60,6 +59,7 @@ B200_COLD_PLATE = Geometry(
 # Section 1: Single cold plate — flow sizing
 # ---------------------------------------------------------------------------
 
+
 def section_single_plate_sizing() -> dict[str, float]:
     """Find minimum flow per cold plate for Tj < 75°C at various inlet temps."""
     print("=" * 72)
@@ -67,8 +67,7 @@ def section_single_plate_sizing() -> dict[str, float]:
     print(f"  TDP: {B200_TDP_W} W | Coolant: water | Tj limit: {B200_TJ_LIMIT_C}°C")
     print(f"  R_jc: {B200_R_JC} K/W (est.) | R_tim: {B200_R_TIM} K/W")
     print("-" * 72)
-    print(f"  {'Inlet (°C)':>10}  {'Min Flow':>10}  {'Tj (°C)':>8}  "
-          f"{'Margin':>8}  {'ΔP (kPa)':>9}  {'Regime':>12}")
+    print(f"  {'Inlet (°C)':>10}  {'Min Flow':>10}  {'Tj (°C)':>8}  {'Margin':>8}  {'ΔP (kPa)':>9}  {'Regime':>12}")
     print("-" * 72)
 
     results = {}
@@ -88,8 +87,10 @@ def section_single_plate_sizing() -> dict[str, float]:
 
         if result is not None:
             margin = B200_TJ_LIMIT_C - result.junction_temp_c
-            print(f"  {inlet_c:>10.0f}  {min_flow:>9.1f}L  {result.junction_temp_c:>7.1f}  "
-                  f"  {margin:>+6.1f}°  {result.pressure_drop_pa / 1000:>9.1f}  {result.regime:>12}")
+            print(
+                f"  {inlet_c:>10.0f}  {min_flow:>9.1f}L  {result.junction_temp_c:>7.1f}  "
+                f"  {margin:>+6.1f}°  {result.pressure_drop_pa / 1000:>9.1f}  {result.regime:>12}"
+            )
             results[f"inlet_{int(inlet_c)}c"] = {
                 "min_flow_lpm": min_flow,
                 "tj_c": result.junction_temp_c,
@@ -107,15 +108,14 @@ def section_single_plate_sizing() -> dict[str, float]:
 # Section 2: Full NVL72 rack — CDU specification
 # ---------------------------------------------------------------------------
 
+
 def section_nvl72_cdu_spec(single_plate_results: dict[str, float]) -> None:
     """Scale to 72-GPU rack and output CDU procurement spec."""
     print("=" * 72)
     print("Section 2: NVL72 Rack (72× B200) — CDU Specification")
-    print(f"  Total TDP: {NVL72_GPU_COUNT * B200_TDP_W / 1000:.1f} kW "
-          f"| Topology: parallel | Coolant: water")
+    print(f"  Total TDP: {NVL72_GPU_COUNT * B200_TDP_W / 1000:.1f} kW | Topology: parallel | Coolant: water")
     print("-" * 72)
-    print(f"  {'CDU Supply':>10}  {'Flow (LPM)':>11}  {'Heat Rej':>10}  "
-          f"{'ΔP (kPa)':>9}  {'CDU Return':>11}  {'Tj (°C)':>8}")
+    print(f"  {'CDU Supply':>10}  {'Flow (LPM)':>11}  {'Heat Rej':>10}  {'ΔP (kPa)':>9}  {'CDU Return':>11}  {'Tj (°C)':>8}")
     print("-" * 72)
 
     cdu_specs = []
@@ -128,31 +128,37 @@ def section_nvl72_cdu_spec(single_plate_results: dict[str, float]) -> None:
         flow_per_gpu = single_plate_results[key]["min_flow_lpm"]
         total_flow = flow_per_gpu * NVL72_GPU_COUNT
 
-        rack = analyze_rack(AnalyzeRackInput(
-            gpu_count=NVL72_GPU_COUNT,
-            topology="parallel",
-            heat_load_per_gpu_w=B200_TDP_W,
-            total_flow_lpm=total_flow,
-            cdu_supply_temp_c=inlet_c,
-            coolant="water",
-            r_jc_k_per_w=B200_R_JC,
-            r_tim_k_per_w=B200_R_TIM,
-            geometry=B200_COLD_PLATE,
-        ))
+        rack = analyze_rack(
+            AnalyzeRackInput(
+                gpu_count=NVL72_GPU_COUNT,
+                topology="parallel",
+                heat_load_per_gpu_w=B200_TDP_W,
+                total_flow_lpm=total_flow,
+                cdu_supply_temp_c=inlet_c,
+                coolant="water",
+                r_jc_k_per_w=B200_R_JC,
+                r_tim_k_per_w=B200_R_TIM,
+                geometry=B200_COLD_PLATE,
+            )
+        )
 
         heat_rejection_kw = rack.total_heat_load_w / 1000
         dp_kpa = rack.total_pressure_drop_pa / 1000
-        cdu_specs.append({
-            "supply_c": inlet_c,
-            "total_flow_lpm": total_flow,
-            "heat_rejection_kw": heat_rejection_kw,
-            "dp_kpa": dp_kpa,
-            "return_c": rack.cdu_outlet_temp_c,
-            "max_tj_c": rack.max_junction_temp_c,
-        })
+        cdu_specs.append(
+            {
+                "supply_c": inlet_c,
+                "total_flow_lpm": total_flow,
+                "heat_rejection_kw": heat_rejection_kw,
+                "dp_kpa": dp_kpa,
+                "return_c": rack.cdu_outlet_temp_c,
+                "max_tj_c": rack.max_junction_temp_c,
+            }
+        )
 
-        print(f"  {inlet_c:>9.0f}°C  {total_flow:>10.0f}L  {heat_rejection_kw:>8.1f}kW  "
-              f"{dp_kpa:>9.1f}  {rack.cdu_outlet_temp_c:>10.1f}°C  {rack.max_junction_temp_c:>7.1f}")
+        print(
+            f"  {inlet_c:>9.0f}°C  {total_flow:>10.0f}L  {heat_rejection_kw:>8.1f}kW  "
+            f"{dp_kpa:>9.1f}  {rack.cdu_outlet_temp_c:>10.1f}°C  {rack.max_junction_temp_c:>7.1f}"
+        )
 
     print("-" * 72)
 
@@ -163,11 +169,9 @@ def section_nvl72_cdu_spec(single_plate_results: dict[str, float]) -> None:
         print("  CDU PROCUREMENT SPEC (25°C facility supply):")
         print(f"    Minimum flow rate:   {spec_25['total_flow_lpm']:.0f} L/min")
         print(f"    Heat rejection:      {spec_25['heat_rejection_kw']:.1f} kW")
-        print(f"    Max cold plate ΔP:   {spec_25['dp_kpa']:.1f} kPa "
-              f"({spec_25['dp_kpa'] / 100:.2f} bar)")
+        print(f"    Max cold plate ΔP:   {spec_25['dp_kpa']:.1f} kPa ({spec_25['dp_kpa'] / 100:.2f} bar)")
         print(f"    CDU return temp:     {spec_25['return_c']:.1f}°C")
-        print(f"    Max junction temp:   {spec_25['max_tj_c']:.1f}°C "
-              f"({B200_TJ_LIMIT_C - spec_25['max_tj_c']:+.1f}°C margin)")
+        print(f"    Max junction temp:   {spec_25['max_tj_c']:.1f}°C ({B200_TJ_LIMIT_C - spec_25['max_tj_c']:+.1f}°C margin)")
     print()
 
 
@@ -175,36 +179,36 @@ def section_nvl72_cdu_spec(single_plate_results: dict[str, float]) -> None:
 # Section 3: Inlet temperature sensitivity — CDU supply setpoint impact
 # ---------------------------------------------------------------------------
 
+
 def section_inlet_sensitivity() -> None:
     """Show how CDU supply temperature affects junction temperature margin."""
     print("=" * 72)
     print("Section 3: Inlet Temperature Sensitivity at Fixed Flow (20 LPM/GPU)")
     print("  Design question: how much margin does a colder CDU supply buy?")
-    print(f"  Fixed: 20 LPM/GPU × {NVL72_GPU_COUNT} GPUs = "
-          f"{20 * NVL72_GPU_COUNT} LPM total")
+    print(f"  Fixed: 20 LPM/GPU × {NVL72_GPU_COUNT} GPUs = {20 * NVL72_GPU_COUNT} LPM total")
     print("-" * 72)
-    print(f"  {'CDU Supply':>10}  {'Max Tj':>8}  {'Tj Margin':>10}  "
-          f"{'CDU Return':>11}  {'Status':>12}")
+    print(f"  {'CDU Supply':>10}  {'Max Tj':>8}  {'Tj Margin':>10}  {'CDU Return':>11}  {'Status':>12}")
     print("-" * 72)
 
     flow_per_gpu = 20.0  # LPM — fixed for this sweep
     for inlet_c in [15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0]:
-        rack = analyze_rack(AnalyzeRackInput(
-            gpu_count=NVL72_GPU_COUNT,
-            topology="parallel",
-            heat_load_per_gpu_w=B200_TDP_W,
-            total_flow_lpm=flow_per_gpu * NVL72_GPU_COUNT,
-            cdu_supply_temp_c=inlet_c,
-            coolant="water",
-            r_jc_k_per_w=B200_R_JC,
-            r_tim_k_per_w=B200_R_TIM,
-            geometry=B200_COLD_PLATE,
-        ))
+        rack = analyze_rack(
+            AnalyzeRackInput(
+                gpu_count=NVL72_GPU_COUNT,
+                topology="parallel",
+                heat_load_per_gpu_w=B200_TDP_W,
+                total_flow_lpm=flow_per_gpu * NVL72_GPU_COUNT,
+                cdu_supply_temp_c=inlet_c,
+                coolant="water",
+                r_jc_k_per_w=B200_R_JC,
+                r_tim_k_per_w=B200_R_TIM,
+                geometry=B200_COLD_PLATE,
+            )
+        )
 
         margin = B200_TJ_LIMIT_C - rack.max_junction_temp_c
         status = "OK" if margin >= 3 else ("WARNING <3°C" if margin >= 0 else "THROTTLING")
-        print(f"  {inlet_c:>9.0f}°C  {rack.max_junction_temp_c:>7.1f}  "
-              f"  {margin:>+8.1f}°  {rack.cdu_outlet_temp_c:>10.1f}°C  {status:>12}")
+        print(f"  {inlet_c:>9.0f}°C  {rack.max_junction_temp_c:>7.1f}    {margin:>+8.1f}°  {rack.cdu_outlet_temp_c:>10.1f}°C  {status:>12}")
 
     print("-" * 72)
     print("  3°C margin is a common engineering design target (guard against TIM aging).")

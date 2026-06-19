@@ -7,7 +7,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-
 CoolantName = Literal["water", "glycol50"]
 
 
@@ -63,21 +62,11 @@ class SensitivityOutput(BaseModel):
     - TDP creep (heat_load_w) of 5–10% is common over GPU product lifetime.
     """
 
-    dtj_dq_c_per_w: float = Field(
-        description="∂Tj/∂Q_heat [°C/W] — junction temp rise per additional watt of chip heat"
-    )
-    dtj_dr_tim_c_per_kw: float = Field(
-        description="∂Tj/∂R_tim [°C per K/W] — junction temp rise per unit TIM resistance increase"
-    )
-    dtj_dt_inlet_dimensionless: float = Field(
-        description="∂Tj/∂T_inlet [°C/°C] — should be ~1.0; confirms inlet shifts Tj 1-for-1"
-    )
-    r_jc_uncertainty_pm_c: float = Field(
-        description="±°C Tj spread from ±20% R_jc manufacturing variation"
-    )
-    r_tim_aged_delta_c: float = Field(
-        description="Tj rise [°C] if R_tim doubles — models TIM pump-out degradation after 2–3 years"
-    )
+    dtj_dq_c_per_w: float = Field(description="∂Tj/∂Q_heat [°C/W] — junction temp rise per additional watt of chip heat")
+    dtj_dr_tim_c_per_kw: float = Field(description="∂Tj/∂R_tim [°C per K/W] — junction temp rise per unit TIM resistance increase")
+    dtj_dt_inlet_dimensionless: float = Field(description="∂Tj/∂T_inlet [°C/°C] — should be ~1.0; confirms inlet shifts Tj 1-for-1")
+    r_jc_uncertainty_pm_c: float = Field(description="±°C Tj spread from ±20% R_jc manufacturing variation")
+    r_tim_aged_delta_c: float = Field(description="Tj rise [°C] if R_tim doubles — models TIM pump-out degradation after 2–3 years")
 
 
 class AnalyzeColdplateOutput(BaseModel):
@@ -238,8 +227,7 @@ class DecisionScenario(BaseModel):
         default=5.0,
         ge=0.0,
         description=(
-            "Safety margin in °C. Optimizer targets (target_junction_temp_c - margin_c). "
-            "Recommended ≥5°C to cover R_jc manufacturing variation and TIM aging."
+            "Safety margin in °C. Optimizer targets (target_junction_temp_c - margin_c). Recommended ≥5°C to cover R_jc manufacturing variation and TIM aging."
         ),
     )
     coolant: CoolantName = "water"
@@ -276,19 +264,13 @@ class DecisionReport(BaseModel):
 
     scenario_label: str
     feasible: bool = Field(description="True if target Tj can be met within the search flow range")
-    risk_level: RiskLevel = Field(
-        description="LOW: >10°C margin remaining; MEDIUM: 5–10°C; HIGH: <5°C or infeasible"
-    )
+    risk_level: RiskLevel = Field(description="LOW: >10°C margin remaining; MEDIUM: 5–10°C; HIGH: <5°C or infeasible")
     recommended_flow: FlowBand
     recommended_supply_temp_c: float
     junction_temp_at_recommended_c: float
-    margin_remaining_c: float = Field(
-        description="Headroom to the actual hard limit: target_junction_temp_c - Tj_at_recommended_flow"
-    )
+    margin_remaining_c: float = Field(description="Headroom to the actual hard limit: target_junction_temp_c - Tj_at_recommended_flow")
     topology_recommendation: str = Field(description="Topology rationale (populated when gpu_count > 1)")
-    uncertainty_section: dict[str, float] = Field(
-        description="Uncertainty contributors in °C, keyed by source"
-    )
+    uncertainty_section: dict[str, float] = Field(description="Uncertainty contributors in °C, keyed by source")
     warnings: list[str]
     blind_spots: list[str] = Field(description="Model limitations always reported to the caller")
     rendered_memo: str = Field(description="Markdown-formatted engineering memo")

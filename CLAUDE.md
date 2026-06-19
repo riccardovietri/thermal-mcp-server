@@ -7,7 +7,7 @@ making changes. For durable project decisions, read `docs/decisions.md`.
 
 A Python MCP server that exposes thermal physics for liquid-cooled GPU cold plates.
 Target audience: data center thermal engineers, AI infrastructure teams.
-Portfolio goal: demonstrate physics credibility + AI tooling at H100/B200 scale.
+Goal: demonstrate physics credibility and AI-callable engineering tooling at H100/B200 scale.
 
 ## Architecture in 30 seconds
 
@@ -17,7 +17,8 @@ physics.py          ← All math: 1D resistance network, Dittus-Boelter, Darcy-W
 mcp_server.py       ← FastMCP tool wrappers (thin — no physics here)
 ```
 
-Four MCP tools: `analyze_coldplate`, `compare_coolants`, `optimize_flow_rate`, `analyze_rack`.
+Five MCP tools: `analyze_coldplate`, `compare_coolants`, `optimize_flow_rate`,
+`analyze_rack`, `generate_decision_report`.
 Public Python API: `analyze()`, `analyze_rack()`, and `optimize_flow()` in `physics.py`.
 
 ## Physics: what the model does and does not do
@@ -109,7 +110,7 @@ Do not change these without a current source citation.
 
 ## Completed features
 
-The original portfolio-priority gaps are now merged:
+The original priority gaps are now merged:
 
 1. **Rack-level model** — `analyze_rack()` supports series and parallel
    topologies. Hand-calc validated. See `docs/physics.md` Section G.
@@ -122,9 +123,13 @@ The original portfolio-priority gaps are now merged:
    ∂Tj/∂Q, ∂Tj/∂R_tim, ∂Tj/∂T_inlet and uncertainty deltas. `margin_c`
    is available on `optimize_flow_rate`.
 
+4. **Decision report synthesis** — `generate_decision_report()` composes
+   existing APIs into a first-pass sizing memo with flow band, risk level,
+   uncertainty section, topology rationale, and blind spots.
+
 ## Current next steps
 
-- PR benchmark diff or reviewer-facing benchmark reporting in CI
+- Reviewer-facing benchmark reporting in CI
 - Interactive demo polish and Colab reliability
 - Keep model limitations explicit as public visibility increases
 
@@ -155,7 +160,7 @@ Before marking any physics change as done, verify:
 
 ## Branch / PR conventions
 
-- Main branch is the stable baseline. PRs from `claude/` branches.
+- Main branch is the stable baseline. PRs should come from named feature branches.
 - Commit style: `fix:`, `feat:`, `docs:`, `examples:`, `test:`
 - Physics changes need hand-calc validation before merge (see above).
 - See `docs/review-policy.md` for the full PR review gate and merge requirements.

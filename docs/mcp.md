@@ -1,6 +1,6 @@
 # MCP Tool Contracts
 
-This server exports four tools.
+This server exports five tools.
 
 ## 1) `analyze_coldplate`
 Purpose: single-point thermal + hydraulic analysis.
@@ -63,14 +63,44 @@ Inputs:
 Output shape:
 - `max_junction_temp_c`
 - `per_gpu_junction_temps_c` (list)
-- `total_flow_lpm`
 - `total_pressure_drop_pa`
 - `total_pump_power_w`
 - `cdu_outlet_temp_c`
 - `total_heat_load_w`
 
-## How Claude uses this
-Claude asks clarifying questions (load, coolant, target temp), then calls one of the four tools and explains:
+## 5) `generate_decision_report`
+Purpose: first-pass engineering memo for a cooling scenario.
+
+Inputs:
+- `chip_label`
+- `heat_load_w`
+- `gpu_count`
+- `topology`: `"series" | "parallel"`
+- `target_junction_temp_c`
+- `margin_c`
+- `coolant`
+- `inlet_temp_c`
+- optional `flow_rate_lpm`
+- shared thermal/geometry params
+
+Output shape:
+- `scenario_label`
+- `feasible`
+- `risk_level`
+- `recommended_flow`
+- `recommended_supply_temp_c`
+- `junction_temp_at_recommended_c`
+- `margin_remaining_c`
+- `topology_recommendation`
+- `uncertainty_section`
+- `warnings`
+- `blind_spots`
+- `rendered_memo`
+
+## How an MCP client uses this
+The client should gather load, coolant, target temperature, and rack topology,
+then call the narrowest tool that answers the question:
+
 1. Junction temperature result
 2. Dominant resistance(s)
 3. Pump/pressure impact and trade-offs

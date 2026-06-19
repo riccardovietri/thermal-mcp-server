@@ -22,12 +22,15 @@ Rationale:
 ## 2026-04-08 — `CLAUDE.md` is the single agent instruction file
 
 `CLAUDE.md` serves all coding agents (Claude Code, Codex, etc.). `AGENTS.md`
-was removed — maintaining two overlapping instruction files caused drift.
+is only a discovery shim for tools that look for `AGENTS.md`; it should point
+to `CLAUDE.md` rather than duplicate project rules.
 
 Rationale:
 
 - One authoritative file is better than two that mostly agree.
 - Codex and other agents that read `CLAUDE.md` get the full context.
+- Keeping `AGENTS.md` minimal avoids instruction drift while preserving Codex
+  discovery behavior.
 
 ## 2026-03-06 — Rack model excludes manifold/header losses
 
