@@ -73,6 +73,20 @@ def _friction_factor(re: float) -> float:
 
 
 def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
+    """Steady-state thermal and hydraulic analysis of a single GPU cold plate.
+
+    Solves a 1D thermal-resistance network from coolant to junction:
+    R_total = R_jc + R_tim + R_base + R_conv (all in K/W). Convection uses a
+    Dittus-Boelter / laminar Nusselt blend over the transition band; the bulk
+    coolant temperature includes half of the coolant temperature rise
+    (ΔT = Q / (ṁ · cp)). Junction temperature is T_j = T_bulk + Q · R_total.
+
+    Pressure drop is Darcy-Weisbach with a Blasius friction factor over the
+    rectangular-channel hydraulic diameter; pump power assumes 50% efficiency.
+
+    Inputs and outputs are in SI-suffixed units (W, LPM, °C, Pa, K/W). See
+    docs/physics.md Sections B-E for the governing equations and limitations.
+    """
     props = COOLANTS[inp.coolant]
     geom = inp.geometry
     flow_m3s, velocity, re, pr, dh = _flow_quantities(inp)
