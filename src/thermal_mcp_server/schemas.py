@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CoolantName = Literal["water", "glycol50"]
+FlowRegime = Literal["laminar", "transitional", "turbulent"]
 
 
 class Geometry(BaseModel):
@@ -73,7 +74,7 @@ class AnalyzeColdplateOutput(BaseModel):
     """Stable output schema for tool consumers."""
 
     coolant: CoolantName
-    regime: Literal["laminar", "transitional", "turbulent"]
+    regime: FlowRegime
     reynolds: float
     nusselt: float
     heat_transfer_coeff_w_m2k: float

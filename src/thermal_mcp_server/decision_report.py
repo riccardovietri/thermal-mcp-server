@@ -7,6 +7,8 @@ No new physics here — this is synthesis and presentation only.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import ValidationError
 
 from .physics import analyze, analyze_rack, compute_sensitivity, optimize_flow
@@ -61,7 +63,7 @@ def _topology_rationale(scenario: DecisionScenario, per_gpu_flow_lpm: float) -> 
     # Compare topologies at the same per-GPU flow (the user-relevant operating
     # point). Series has total = per-GPU (single loop), parallel has
     # total = per-GPU × N (split across N branches). See analyze_rack semantics.
-    common = dict(
+    common: dict[str, Any] = dict(
         gpu_count=scenario.gpu_count,
         heat_load_per_gpu_w=scenario.heat_load_w,
         cdu_supply_temp_c=scenario.inlet_temp_c,

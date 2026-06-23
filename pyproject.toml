@@ -33,6 +33,7 @@ dependencies = [
 # Keep the two lists identical.
 [project.optional-dependencies]
 dev = [
+    "mypy>=1.13.0",
     "pytest>=9.0.2",
     "pytest-cov>=4.1.0",
     "ruff>=0.8.0",
@@ -66,8 +67,21 @@ extend-exclude = ["_attic", "examples/interactive_sizing.ipynb"]
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 
+# Typing baseline: the package type-checks clean. Scoped to src/ — examples
+# and the _attic/ scratch code are intentionally excluded from the gate.
+[tool.mypy]
+python_version = "3.10"
+files = ["src"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+# fastmcp does not ship type stubs; don't fail on its missing imports.
+[[tool.mypy.overrides]]
+module = ["fastmcp.*"]
+ignore_missing_imports = true
+
 [dependency-groups]
 dev = [
+    "mypy>=1.13.0",
     "pytest>=9.0.2",
     "pytest-cov>=4.1.0",
     "ruff>=0.8.0",
