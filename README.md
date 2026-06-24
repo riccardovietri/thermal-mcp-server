@@ -97,6 +97,14 @@ Example MCP client run:
 The client calls `analyze_coldplate` through the MCP server, receives the
 thermal result, and interprets the output in the conversation.
 
+To reproduce this locally without a separate client, run the in-memory demo —
+it drives the same MCP server in-process (no network, no API key) and prints the
+exact request/response payloads a model sees:
+
+```bash
+python examples/mcp_client_demo.py
+```
+
 ## Tools
 
 | Tool | Purpose |
@@ -139,12 +147,13 @@ See [`docs/public_specs.md`](docs/public_specs.md) and
 
 ## Tests
 
-The current suite has 74 tests:
+The current suite has 75 tests:
 
 - Physics behavior and hand-calculation checks.
 - MCP wrapper contracts and error envelopes.
 - Decision report behavior, including rack-aware feasibility.
-- Smoke tests for `examples/quickstart.py` and `examples/rack_sizing_example.py`.
+- Smoke tests for `examples/quickstart.py`, `examples/rack_sizing_example.py`,
+  and `examples/mcp_client_demo.py`.
 
 Run:
 
