@@ -24,7 +24,8 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "fastmcp>=2.0,<3",
+    # >=2.10: examples/mcp_client_demo.py uses CallToolResult.data (added in 2.10.0).
+    "fastmcp>=2.10.0,<3",
     "pydantic>=2.6.0",
 ]
 
