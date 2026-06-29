@@ -12,7 +12,7 @@ source categories without treating every value as equally certain.
 
 ## Public Analysis And Proxies
 
-- B200/NVL72 thermal-limit examples use public third-party analysis where NVIDIA
+- GB200 NVL72 thermal-limit examples use public third-party analysis where NVIDIA
   does not publish the required junction-temperature limit.
 - MI300X and Gaudi 3 examples use conservative junction-temperature proxies when
   vendor Tj max is not published.

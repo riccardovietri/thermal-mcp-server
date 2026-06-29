@@ -1,10 +1,10 @@
-"""NVIDIA NVL72 Rack Thermal Analysis — CDU Specification Guide.
+"""NVIDIA GB200 NVL72 Rack Thermal Analysis — CDU Specification Guide.
 
-The NVL72 (72× B200 GPUs per rack) is the flagship AI training system.
+The GB200 NVL72 (72× B200 GPUs per rack) is the flagship AI training system.
 At 86.4 kW rack TDP, it is the most thermally demanding GPU deployment
 in production today. This example answers the procurement question:
 
-    "What CDU do I need to cool a B200 NVL72 rack?"
+    "What CDU do I need to cool a GB200 NVL72 rack?"
 
 Outputs CDU spec (flow rate, heat rejection, max ΔP) as a function of
 CDU supply temperature — the primary variable operators can control.
@@ -105,14 +105,14 @@ def section_single_plate_sizing() -> dict[str, float]:
 
 
 # ---------------------------------------------------------------------------
-# Section 2: Full NVL72 rack — CDU specification
+# Section 2: Full GB200 NVL72 rack — CDU specification
 # ---------------------------------------------------------------------------
 
 
 def section_nvl72_cdu_spec(single_plate_results: dict[str, float]) -> None:
     """Scale to 72-GPU rack and output CDU procurement spec."""
     print("=" * 72)
-    print("Section 2: NVL72 Rack (72× B200) — CDU Specification")
+    print("Section 2: GB200 NVL72 Rack (72× B200) — CDU Specification")
     print(f"  Total TDP: {NVL72_GPU_COUNT * B200_TDP_W / 1000:.1f} kW | Topology: parallel | Coolant: water")
     print("-" * 72)
     print(f"  {'CDU Supply':>10}  {'Flow (LPM)':>11}  {'Heat Rej':>10}  {'ΔP (kPa)':>9}  {'CDU Return':>11}  {'Tj (°C)':>8}")
@@ -221,7 +221,7 @@ def section_inlet_sensitivity() -> None:
 
 if __name__ == "__main__":
     print()
-    print("  NVIDIA NVL72 RACK THERMAL ANALYSIS")
+    print("  NVIDIA GB200 NVL72 RACK THERMAL ANALYSIS")
     print("  72× B200 GPUs | 86.4 kW total TDP | Direct liquid cooling")
     print()
     print("  NOTE: B200 R_jc = 0.02 K/W is an engineering estimate.")
