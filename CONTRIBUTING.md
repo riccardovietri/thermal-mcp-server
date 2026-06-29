@@ -22,6 +22,7 @@ ruff format --check .      # formatting
 mypy                       # static type check (src/)
 python examples/quickstart.py        # example smoke test
 python examples/rack_sizing_example.py
+uv build                  # package build
 ```
 
 `ruff format .` (without `--check`) applies formatting fixes in place.
