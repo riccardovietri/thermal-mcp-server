@@ -2,8 +2,30 @@
 
 This server exports five tools.
 
+For a runnable, no-network example that calls these tools through the MCP layer
+and prints the payloads below, see [`examples/mcp_client_demo.py`](../examples/mcp_client_demo.py).
+
 ## 1) `analyze_coldplate`
 Purpose: single-point thermal + hydraulic analysis.
+
+Example request / response (canonical 700 W / 8 LPM water default case):
+
+```jsonc
+// request
+{"heat_load_w": 700.0, "flow_rate_lpm": 8.0, "inlet_temp_c": 25.0, "coolant": "water"}
+
+// response (abridged)
+{
+  "coolant": "water",
+  "regime": "transitional",
+  "reynolds": 3734.08,
+  "junction_temp_c": 70.90,
+  "pressure_drop_pa": 16800.35,
+  "pump_power_w": 4.48,
+  "resistances_k_per_w": {"junction_to_case": 0.04, "tim": 0.02, "base_conduction": 0.00052, "convection": 0.00416, "total": 0.06467},
+  "warnings": []
+}
+```
 
 Inputs (stable):
 - `heat_load_w` (float > 0)

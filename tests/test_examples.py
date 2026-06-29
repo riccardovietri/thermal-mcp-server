@@ -33,3 +33,13 @@ def test_rack_sizing_example_runs():
     assert "parallel" in output
     assert "79.7 C" in output
     assert "70.9 C" in output
+
+
+def test_mcp_client_demo_runs():
+    output = _run_example("mcp_client_demo.py")
+    # Tools are advertised to the model through the MCP layer.
+    assert "analyze_coldplate" in output
+    assert "generate_decision_report" in output
+    # Structured tool result flows back with the canonical default-case Tj.
+    assert "70.90231" in output
+    assert "blind spots listed: 6" in output
