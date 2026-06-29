@@ -10,11 +10,22 @@ source venv/bin/activate
 pip install -e .[dev]
 ```
 
-## Running tests
+## Quality gate
+
+CI runs the following checks on every push and pull request. Run them locally
+before pushing — a change that fails any of these will not go green:
 
 ```bash
-pytest
+pytest                     # behavioral + hand-calc tests
+ruff check .               # lint
+ruff format --check .      # formatting
+mypy                       # static type check (src/)
+python examples/quickstart.py        # example smoke test
+python examples/rack_sizing_example.py
+uv build                  # package build
 ```
+
+`ruff format .` (without `--check`) applies formatting fixes in place.
 
 ## Physics changes
 
@@ -35,6 +46,6 @@ Add to the `COOLANTS` dict in `src/thermal_mcp_server/physics.py` with:
 
 ## Code style
 
-- Type hints on all public functions
+- Type hints on all public functions; `mypy` must pass clean
 - `# ASSUMPTION:` comments on any non-obvious modeling choices
 - Conventional commits: `fix:`, `feat:`, `docs:`, `examples:`, `test:`

@@ -157,10 +157,15 @@ pytest
 ```bash
 uv sync --group dev
 uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy
 uv build
 uv run python examples/quickstart.py
 uv run python examples/rack_sizing_example.py
 ```
+
+These mirror the CI gate; all must pass before a PR can merge.
 
 ## Roadmap
 
