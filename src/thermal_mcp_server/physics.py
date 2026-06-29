@@ -14,6 +14,8 @@ from .schemas import (
     AnalyzeColdplateOutput,
     AnalyzeRackInput,
     AnalyzeRackOutput,
+    CoolantName,
+    FlowRegime,
     OptimizeFlowRateInput,
     SensitivityOutput,
 )
@@ -27,7 +29,7 @@ class CoolantProperties:
     mu_pa_s: float
 
 
-COOLANTS: dict[str, CoolantProperties] = {
+COOLANTS: dict[CoolantName, CoolantProperties] = {
     "water": CoolantProperties(997.0, 4180.0, 0.60, 0.00089),
     # Ethylene glycol 50% by volume, nominal 25°C properties.
     # For propylene glycol (lower toxicity), viscosity is ~60-80% higher at 25°C.
@@ -49,7 +51,7 @@ def _flow_quantities(inp: AnalyzeColdplateInput) -> tuple[float, float, float, f
     return flow_m3s, velocity, re, pr, dh
 
 
-def _nusselt(re: float, pr: float) -> tuple[float, str]:
+def _nusselt(re: float, pr: float) -> tuple[float, FlowRegime]:
     if re < 2300:
         return 4.36, "laminar"
     if re > 4000:
