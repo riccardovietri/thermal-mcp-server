@@ -27,6 +27,27 @@ A Python package and MCP server that exposes simplified liquid-cooled accelerato
 
 ## Quickstart
 
+### 30-Second Example (Zero Install)
+
+If you just want to see it work without cloning the repo, you can run this snippet anywhere (or try it interactively via the Google Colab badge above).
+
+```bash
+pip install thermal-mcp-server
+```
+
+```python
+from thermal_mcp_server.physics import analyze_coldplate
+res = analyze_coldplate(power_w=700, flow_rate_lpm=8.0, t_in_c=25.0)
+print(f"Tj: {res.junction_temp_c:.1f} °C, ΔP: {res.pressure_drop_pa/1000:.1f} kPa")
+```
+
+**Output:**
+```
+Tj: 70.9 °C, ΔP: 16.8 kPa
+```
+
+### Development Setup
+
 ```bash
 git clone https://github.com/riccardovietri/thermal-mcp-server.git
 cd thermal-mcp-server
