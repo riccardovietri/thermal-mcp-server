@@ -53,7 +53,7 @@ CONFIGS = [
         flow_per_gpu_lpm=8.0,
     ),
     RackConfig(
-        name="B200 NVL36 (36× B200, half-rack)",
+        name="GB200 NVL36 (36× B200, half-rack)",
         gpu_count=36,
         tdp_per_gpu_w=1200.0,
         tj_limit_c=75.0,

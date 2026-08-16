@@ -137,7 +137,7 @@ hand-calculation references are in [`docs/physics.md`](docs/physics.md).
 
 ## Public Reference Cases
 
-The examples include H100 SXM, B200/NVL72-style, MI300X, and Gaudi 3 cases.
+The examples include H100 SXM, B200 / GB200 NVL72-style, MI300X, and Gaudi 3 cases.
 Only H100 TDP and thermal limit are treated as vendor-published values in the
 default examples. Other limits, package resistances, and high-power cold-plate
 geometry are marked as estimates or proxies where vendors do not publish them.
