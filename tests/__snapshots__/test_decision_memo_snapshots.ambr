@@ -1,0 +1,148 @@
+# serializer version: 1
+# name: test_b200_proxy_snapshot
+  dict({
+    'blind_spots': list([
+      'Manifold and header pressure losses are not modeled; actual system ΔP will be higher.',
+      'Fluid properties are assumed constant at the nominal inlet temperature; glycol viscosity varies ~2× over 20–60°C, which affects ΔP and Nusselt predictions at elevated temperatures.',
+      'All GPUs are assumed identical (same TDP, geometry, resistances); real rack heterogeneity is not captured.',
+      'Steady-state only — no transient thermal capacitance or thermal mass effects.',
+      'Uniform flow distribution assumed; no maldistribution across channels or parallel branches.',
+      'No boiling or two-phase flow; model is valid only for single-phase liquid cooling.',
+    ]),
+    'feasible': False,
+    'junction_temp_at_recommended_c': 86.3,
+    'margin_remaining_c': -3.3,
+    'recommended_flow': dict({
+      'basis': 'margin_c=3.0°C applied to target 83.0°C',
+      'max_lpm': 90.0,
+      'min_lpm': 60.0,
+      'recommended_lpm': 69.0,
+    }),
+    'recommended_supply_temp_c': 25.0,
+    'risk_level': <RiskLevel.HIGH: 'high'>,
+    'scenario_label': 'B200 (Proxy) — 1000 W, 8 GPUs, water, 25°C inlet',
+    'topology_recommendation': 'Parallel topology selected. Parallel Tj_max = 86.3°C vs series Tj_max = 87.8°C (Δ = 1.5°C lower with parallel). Parallel pump power = 14325.2 W vs series = 14325.2 W (Δ = 0.0 W higher with parallel). Parallel topology equalizes inlet temperature across all GPUs but requires a manifold.',
+    'uncertainty_section': dict({
+      'R_jc manufacturing variation (±20%)': 8.0,
+      'TIM pump-out degradation (R_tim ×2 after 2–3 yr)': 20.0,
+      '∂Tj/∂Q × 10W TDP creep': 0.61,
+      '∂Tj/∂T_inlet × 1°C supply drift': 1.0,
+    }),
+    'warnings': list([
+      'INFEASIBLE: cannot reach Tj ≤ 80.0°C (target 83.0°C − margin 3.0°C) with the recommended flow and selected topology.',
+      'junction temperature exceeds 85C',
+      'GPU 0 (0-indexed) junction temperature 86.3°C exceeds 85°C design ceiling',
+      'all GPUs: junction temperature exceeds 85C',
+    ]),
+  })
+# ---
+# name: test_blind_spots_invariant
+  list([
+    'Manifold and header pressure losses are not modeled; actual system ΔP will be higher.',
+    'Fluid properties are assumed constant at the nominal inlet temperature; glycol viscosity varies ~2× over 20–60°C, which affects ΔP and Nusselt predictions at elevated temperatures.',
+    'All GPUs are assumed identical (same TDP, geometry, resistances); real rack heterogeneity is not captured.',
+    'Steady-state only — no transient thermal capacitance or thermal mass effects.',
+    'Uniform flow distribution assumed; no maldistribution across channels or parallel branches.',
+    'No boiling or two-phase flow; model is valid only for single-phase liquid cooling.',
+  ])
+# ---
+# name: test_glycol50_snapshot
+  dict({
+    'blind_spots': list([
+      'Manifold and header pressure losses are not modeled; actual system ΔP will be higher.',
+      'Fluid properties are assumed constant at the nominal inlet temperature; glycol viscosity varies ~2× over 20–60°C, which affects ΔP and Nusselt predictions at elevated temperatures.',
+      'All GPUs are assumed identical (same TDP, geometry, resistances); real rack heterogeneity is not captured.',
+      'Steady-state only — no transient thermal capacitance or thermal mass effects.',
+      'Uniform flow distribution assumed; no maldistribution across channels or parallel branches.',
+      'No boiling or two-phase flow; model is valid only for single-phase liquid cooling.',
+    ]),
+    'feasible': True,
+    'junction_temp_at_recommended_c': 72.23,
+    'margin_remaining_c': 10.77,
+    'recommended_flow': dict({
+      'basis': 'margin_c=5.0°C applied to target 83.0°C',
+      'max_lpm': 40.826,
+      'min_lpm': 27.218,
+      'recommended_lpm': 31.3,
+    }),
+    'recommended_supply_temp_c': 25.0,
+    'risk_level': <RiskLevel.LOW: 'low'>,
+    'scenario_label': 'H100 (PG50) — 700 W, 8 GPUs, glycol50, 25°C inlet',
+    'topology_recommendation': 'Parallel topology selected. Parallel Tj_max = 72.2°C vs series Tj_max = 74.8°C (Δ = 2.6°C lower with parallel). Parallel pump power = 1920.6 W vs series = 1920.6 W (Δ = 0.0 W higher with parallel). Parallel topology equalizes inlet temperature across all GPUs but requires a manifold.',
+    'uncertainty_section': dict({
+      'R_jc manufacturing variation (±20%)': 5.6,
+      'TIM pump-out degradation (R_tim ×2 after 2–3 yr)': 14.0,
+      '∂Tj/∂Q × 10W TDP creep': 0.67,
+      '∂Tj/∂T_inlet × 1°C supply drift': 1.0,
+    }),
+    'warnings': list([
+    ]),
+  })
+# ---
+# name: test_h100_parallel_snapshot
+  dict({
+    'blind_spots': list([
+      'Manifold and header pressure losses are not modeled; actual system ΔP will be higher.',
+      'Fluid properties are assumed constant at the nominal inlet temperature; glycol viscosity varies ~2× over 20–60°C, which affects ΔP and Nusselt predictions at elevated temperatures.',
+      'All GPUs are assumed identical (same TDP, geometry, resistances); real rack heterogeneity is not captured.',
+      'Steady-state only — no transient thermal capacitance or thermal mass effects.',
+      'Uniform flow distribution assumed; no maldistribution across channels or parallel branches.',
+      'No boiling or two-phase flow; model is valid only for single-phase liquid cooling.',
+    ]),
+    'feasible': True,
+    'junction_temp_at_recommended_c': 73.64,
+    'margin_remaining_c': 9.36,
+    'recommended_flow': dict({
+      'basis': 'margin_c=5.0°C applied to target 83.0°C',
+      'max_lpm': 8.249,
+      'min_lpm': 5.499,
+      'recommended_lpm': 6.324,
+    }),
+    'recommended_supply_temp_c': 25.0,
+    'risk_level': <RiskLevel.MEDIUM: 'medium'>,
+    'scenario_label': 'H100 (SXM proxy) — 700 W, 8 GPUs, water, 25°C inlet',
+    'topology_recommendation': 'Parallel topology selected. Parallel Tj_max = 73.6°C vs series Tj_max = 84.8°C (Δ = 11.2°C lower with parallel). Parallel pump power = 15.1 W vs series = 15.1 W (Δ = 0.0 W higher with parallel). Parallel topology equalizes inlet temperature across all GPUs but requires a manifold.',
+    'uncertainty_section': dict({
+      'R_jc manufacturing variation (±20%)': 5.6,
+      'TIM pump-out degradation (R_tim ×2 after 2–3 yr)': 14.0,
+      '∂Tj/∂Q × 10W TDP creep': 0.69,
+      '∂Tj/∂T_inlet × 1°C supply drift': 1.0,
+    }),
+    'warnings': list([
+    ]),
+  })
+# ---
+# name: test_h100_series_snapshot
+  dict({
+    'blind_spots': list([
+      'Manifold and header pressure losses are not modeled; actual system ΔP will be higher.',
+      'Fluid properties are assumed constant at the nominal inlet temperature; glycol viscosity varies ~2× over 20–60°C, which affects ΔP and Nusselt predictions at elevated temperatures.',
+      'All GPUs are assumed identical (same TDP, geometry, resistances); real rack heterogeneity is not captured.',
+      'Steady-state only — no transient thermal capacitance or thermal mass effects.',
+      'Uniform flow distribution assumed; no maldistribution across channels or parallel branches.',
+      'No boiling or two-phase flow; model is valid only for single-phase liquid cooling.',
+    ]),
+    'feasible': False,
+    'junction_temp_at_recommended_c': 84.8,
+    'margin_remaining_c': -1.8,
+    'recommended_flow': dict({
+      'basis': 'margin_c=5.0°C applied to target 83.0°C',
+      'max_lpm': 8.249,
+      'min_lpm': 5.499,
+      'recommended_lpm': 6.324,
+    }),
+    'recommended_supply_temp_c': 25.0,
+    'risk_level': <RiskLevel.HIGH: 'high'>,
+    'scenario_label': 'H100 (SXM proxy) — 700 W, 8 GPUs, water, 25°C inlet',
+    'topology_recommendation': 'Series topology selected. Series Tj_max = 84.8°C vs parallel Tj_max = 73.6°C (Δ = +11.2°C). Series pump power = 15.1 W vs parallel = 15.1 W (Δ = +0.0 W). Series plumbing is simpler (one loop) but delivers hotter coolant to downstream GPUs.',
+    'uncertainty_section': dict({
+      'R_jc manufacturing variation (±20%)': 5.6,
+      'TIM pump-out degradation (R_tim ×2 after 2–3 yr)': 14.0,
+      '∂Tj/∂Q × 10W TDP creep': 0.69,
+      '∂Tj/∂T_inlet × 1°C supply drift': 1.0,
+    }),
+    'warnings': list([
+      'INFEASIBLE: cannot reach Tj ≤ 78.0°C (target 83.0°C − margin 5.0°C) with the recommended flow and selected topology.',
+    ]),
+  })
+# ---
