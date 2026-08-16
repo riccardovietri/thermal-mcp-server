@@ -26,3 +26,14 @@ jobs:
           uv run python examples/rack_sizing_example.py
       - name: Build
         run: uv build
+
+  notebook:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Install (dev + demo)
+        run: uv sync --group dev --extra demo
+      - name: Execute notebook
+        run: uv run pytest --nbmake examples/interactive_sizing.ipynb
+
