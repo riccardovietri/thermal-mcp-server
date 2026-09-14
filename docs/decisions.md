@@ -4,6 +4,26 @@ Durable project decisions that should survive across branches and sessions.
 Use this file for choices that future agents and contributors should not need to
 re-derive from old PRs or chat logs.
 
+## 2026-09-10 — Milestone 1 uses an explicit v2 screening-report contract
+
+The owner approved implementing one milestone at a time and the breaking report
+format described in [the Milestone 1 contract](milestone-1-contract.md).
+
+- Preserve fixed-flow inputs; distinguish point failure, search failure, and
+  unavailable evaluation. Never substitute single-plate results for a rack.
+- Replace heuristic operating recommendations and risk levels with evaluated
+  points, search scope, signed stress scenarios, and input provenance.
+- Keep system hydraulic feasibility and overall risk unassessed until the model
+  and evidence support them. Equation verification is not hardware validation.
+- Preserve numerical equations, physical defaults, and standalone analysis APIs
+  in this milestone. MCP exposes the same report as Python.
+- Owner review and merge approval precede Milestone 2. This decision does not
+  authorize adding hydraulic models, publishing a release, or renaming the project.
+
+The report-schema version is distinct from the package release version. External
+report consumers need the migration in [MCP contracts](mcp.md); do not publish the
+breaking contract as an undocumented patch.
+
 ## 2026-03-07 — Cross-agent memory is repo-first
 
 Project memory is split by scope:

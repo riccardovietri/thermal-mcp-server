@@ -8,8 +8,8 @@ plates simultaneously). The choice affects:
     parallel keeps every GPU at CDU supply temperature.
   - Pressure drop: series accumulates ΔP across all plates; parallel sees
     only the single-plate ΔP (but needs proportionally more total flow).
-  - CDU specification: series needs less total flow but higher ΔP pump;
-    parallel needs more flow but lower ΔP.
+  - Modeled rack-side requirements: series has less total flow but accumulated
+    cold-plate ΔP; parallel has more total flow but one branch's cold-plate ΔP.
 
 This example compares both topologies across three representative rack
 configurations at equivalent per-GPU flow rates.
@@ -127,15 +127,17 @@ def analyze_topology_pair(cfg: RackConfig) -> None:
 
     print("-" * 72)
 
-    # Recommendation
+    # Screening interpretation. This does not select a system topology because
+    # manifolds, flow distribution, pump curves, and redundancy are excluded.
     if margin_s >= 3:
-        rec = "Both topologies viable. Series preferred: less CDU flow, simpler manifold."
+        rec = "Both modeled points clear the illustrative 3°C thermal threshold."
     elif margin_p >= 3:
-        rec = "Parallel required: series temperature stacking exceeds Tj limit."
+        rec = "Only the parallel modeled point clears the illustrative 3°C threshold."
     else:
-        rec = "Both topologies marginal. Increase flow rate or reduce inlet temp."
+        rec = "Neither modeled point clears the illustrative 3°C threshold."
 
     print(f"  → {rec}")
+    print("    Overall topology selection is not assessed by this example.")
     print()
 
 

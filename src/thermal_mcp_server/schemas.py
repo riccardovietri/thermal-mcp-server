@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -51,23 +51,23 @@ class AnalyzeColdplateInput(BaseModel):
 
 
 class SensitivityOutput(BaseModel):
-    """Finite-difference sensitivity coefficients and engineering uncertainty bounds.
+    """Finite-difference sensitivity coefficients and illustrative perturbations.
 
     All derivatives are computed by perturbing each parameter by a small amount
     while holding everything else constant. See docs/physics.md Section H for
     derivation and interpretation.
 
-    Useful for understanding which parameters dominate Tj uncertainty:
-    - R_jc has ±20% manufacturing variation (NVIDIA does not publish tolerances).
-    - R_tim typically doubles over 2–3 years of pump-out degradation.
-    - TDP creep (heat_load_w) of 5–10% is common over GPU product lifetime.
+    Useful for understanding which parameters most affect the modeled Tj:
+    - R_jc is perturbed by an illustrative ±20%.
+    - R_tim is doubled as an illustrative scenario.
+    These are not measured tolerances or service-life predictions.
     """
 
     dtj_dq_c_per_w: float = Field(description="∂Tj/∂Q_heat [°C/W] — junction temp rise per additional watt of chip heat")
     dtj_dr_tim_c_per_kw: float = Field(description="∂Tj/∂R_tim [°C per K/W] — junction temp rise per unit TIM resistance increase")
     dtj_dt_inlet_dimensionless: float = Field(description="∂Tj/∂T_inlet [°C/°C] — should be ~1.0; confirms inlet shifts Tj 1-for-1")
-    r_jc_uncertainty_pm_c: float = Field(description="±°C Tj spread from ±20% R_jc manufacturing variation")
-    r_tim_aged_delta_c: float = Field(description="Tj rise [°C] if R_tim doubles — models TIM pump-out degradation after 2–3 years")
+    r_jc_uncertainty_pm_c: float = Field(description="±°C Tj change for an illustrative ±20% R_jc perturbation")
+    r_tim_aged_delta_c: float = Field(description="Tj rise [°C] if R_tim doubles; an illustrative scenario, not a lifetime model")
 
 
 class AnalyzeColdplateOutput(BaseModel):
@@ -105,8 +105,8 @@ class OptimizeFlowRateInput(BaseModel):
         ge=0.0,
         description=(
             "Safety margin [°C]. The optimizer targets (max_junction_temp_c − margin_c) "
-            "as the effective ceiling. Use ≥5°C to account for R_jc manufacturing variation "
-            "and TIM degradation."
+            "as the effective ceiling. Select the guardband from component and operating evidence; "
+            "no universal margin is inferred."
         ),
     )
     inlet_temp_c: float = Field(default=25.0, ge=-20.0, le=80.0)
@@ -183,30 +183,26 @@ class AnalyzeRackOutput(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class RiskLevel(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+class StressScenarioInputs(BaseModel):
+    """Magnitudes for five separately evaluated illustrative stress cases."""
 
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
-class FlowBand(BaseModel):
-    """Recommended coolant flow operating band for a given scenario."""
-
-    min_lpm: float = Field(description="Minimum flow that meets the thermal target with margin")
-    recommended_lpm: float = Field(description="Recommended operating point (15% above minimum)")
-    max_lpm: float = Field(description="Upper bound used in search (50% above minimum)")
-    basis: str = Field(description="Human-readable explanation of how the band was derived")
+    r_jc_variation_fraction: float = Field(default=0.20, ge=0.0, le=1.0, description="Positive relative package-resistance variation")
+    r_tim_multiplier: float = Field(default=2.0, ge=0.0, description="TIM resistance multiplier")
+    heat_load_delta_w: float = Field(default=10.0, description="Signed heat-load change in watts")
+    supply_temp_delta_c: float = Field(default=1.0, description="Signed supply-temperature change in °C")
 
 
 class DecisionScenario(BaseModel):
     """Input for a first-pass cooling decision report.
 
     Describes a single GPU or rack scenario to be analyzed and synthesized into
-    an engineering recommendation memo. Physics parameters default to H100 SXM
-    reference values; override as needed.
+    a thermal screening report. Defaults are illustrative scenario inputs, not
+    vendor-verified component properties.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     chip_label: str = Field(
         default="GPU",
@@ -227,16 +223,14 @@ class DecisionScenario(BaseModel):
     margin_c: float = Field(
         default=5.0,
         ge=0.0,
-        description=(
-            "Safety margin in °C. Optimizer targets (target_junction_temp_c - margin_c). Recommended ≥5°C to cover R_jc manufacturing variation and TIM aging."
-        ),
+        description=("Caller-supplied guardband in °C; the thermal criterion is target_junction_temp_c minus margin_c."),
     )
     coolant: CoolantName = "water"
     inlet_temp_c: float = Field(default=25.0, ge=-20.0, le=80.0, description="Coolant supply temperature in °C")
     flow_rate_lpm: float | None = Field(
         default=None,
         gt=0,
-        description="Coolant flow rate per GPU in L/min. If None, auto-optimized to meet target.",
+        description="Fixed flow in L/min per GPU, or None for thermal search (series uses a single-plate candidate only).",
     )
     geometry: Geometry | None = Field(
         default=None,
@@ -244,6 +238,14 @@ class DecisionScenario(BaseModel):
     )
     r_jc_k_per_w: float = Field(default=0.04, ge=0, description="Junction-to-case thermal resistance in K/W")
     r_tim_k_per_w: float = Field(default=0.02, ge=0, description="TIM resistance in K/W")
+    input_source_notes: dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional caller-provided source notes keyed by scenario or leaf input path",
+    )
+    stress_scenarios: StressScenarioInputs = Field(
+        default_factory=StressScenarioInputs,
+        description="Caller-configurable magnitudes for the independent stress cases",
+    )
 
     @model_validator(mode="after")
     def margin_less_than_target(self) -> "DecisionScenario":
@@ -252,26 +254,123 @@ class DecisionScenario(BaseModel):
         return self
 
 
+class DecisionStatus(str, Enum):
+    """Scope-aware result state for a decision report."""
+
+    MEETS_TARGET = "meets_target"
+    FAILS_AT_EVALUATED_FLOW = "fails_at_evaluated_flow"
+    NO_FEASIBLE_FLOW_IN_SEARCH_RANGE = "no_feasible_flow_in_search_range"
+    UNDETERMINED = "undetermined"
+
+
+class EvaluationMode(str, Enum):
+    FIXED_FLOW = "fixed_flow"
+    THERMAL_SEARCH = "thermal_search"
+
+
+FlowSearchScope = Literal[
+    "single_plate",
+    "parallel_rack",
+    "single_plate_candidate_for_series",
+]
+EvaluatedPointRole = Literal[
+    "fixed_input",
+    "thermal_search_result",
+    "series_candidate",
+    "search_bound_diagnostic",
+]
+
+
+class FlowSearch(BaseModel):
+    """Thermal search scope and result, when an optimization was attempted."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    scope: FlowSearchScope
+    min_lpm_per_gpu: float = Field(gt=0)
+    max_lpm_per_gpu: float = Field(gt=0)
+    minimum_feasible_lpm_per_gpu: float | None = Field(default=None, gt=0)
+    lower_bound_limited: bool = False
+
+    @model_validator(mode="after")
+    def bounds_are_ordered(self) -> "FlowSearch":
+        if self.max_lpm_per_gpu <= self.min_lpm_per_gpu:
+            raise ValueError("max_lpm_per_gpu must exceed min_lpm_per_gpu")
+        if self.minimum_feasible_lpm_per_gpu is not None and not (self.min_lpm_per_gpu <= self.minimum_feasible_lpm_per_gpu <= self.max_lpm_per_gpu):
+            raise ValueError("minimum_feasible_lpm_per_gpu must lie within the search interval")
+        return self
+
+
+class EvaluatedPoint(BaseModel):
+    """One explicitly evaluated operating point, selected or diagnostic."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    role: EvaluatedPointRole
+    flow_lpm_per_gpu: float = Field(gt=0)
+    supply_temp_c: float
+    junction_temp_c: float
+    margin_to_limit_c: float
+    margin_to_criterion_c: float
+    meets_thermal_target: bool
+    pressure_drop_pa: float | None = Field(default=None, ge=0, description="Cold-plate-only pressure drop; excludes system losses")
+    pump_power_w: float | None = Field(default=None, ge=0)
+    cdu_outlet_temp_c: float | None = None
+
+
+class StressScenarioResult(BaseModel):
+    """Result for one stress scenario, or an explicit unavailable state."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    name: str
+    status: Literal["evaluated", "unavailable"]
+    changed_parameter: str | None = None
+    base_value: float | None = None
+    perturbed_value: float | None = None
+    units: str | None = None
+    signed_junction_delta_c: float | None = None
+    flow_lpm_per_gpu: float | None = None
+    junction_temp_c: float | None = None
+    margin_to_limit_c: float | None = None
+    margin_to_criterion_c: float | None = None
+    reason: str | None = None
+
+
+class ModelMetadata(BaseModel):
+    """Model identity and validity disclosures carried with every report."""
+
+    package_version: str
+    model_name: str = "steady_state_1d_coldplate"
+    validation_state: Literal["unvalidated"] = "unvalidated"
+    coolant_property_reference_temp_c: float = 25.0
+    applicability_notices: list[str]
+
+
 class DecisionReport(BaseModel):
-    """Structured first-pass cooling decision memo.
+    """Version 2 structured cooling decision report.
 
-    Synthesizes single-point analysis, flow optimization, rack modeling, and
-    sensitivity outputs into an actionable engineering recommendation. The
-    rendered_memo field always contains a human-readable markdown summary.
-
-    Model blind spots are always populated from documented limitations — never
-    suppressed. See docs/physics.md for full scope.
+    The report distinguishes evaluated points from recommendations and uses
+    explicit unknown states. It does not assess system hydraulic feasibility or
+    overall engineering risk without head/loss constraints and validation data.
     """
 
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    report_schema_version: Literal[2] = 2
     scenario_label: str
-    feasible: bool = Field(description="True if target Tj can be met within the search flow range")
-    risk_level: RiskLevel = Field(description="LOW: >10°C margin remaining; MEDIUM: 5–10°C; HIGH: <5°C or infeasible")
-    recommended_flow: FlowBand
-    recommended_supply_temp_c: float
-    junction_temp_at_recommended_c: float
-    margin_remaining_c: float = Field(description="Headroom to the actual hard limit: target_junction_temp_c - Tj_at_recommended_flow")
-    topology_recommendation: str = Field(description="Topology rationale (populated when gpu_count > 1)")
-    uncertainty_section: dict[str, float] = Field(description="Uncertainty contributors in °C, keyed by source")
+    status: DecisionStatus
+    evaluation_mode: EvaluationMode
+    attempted_flow_lpm_per_gpu: float | None = Field(default=None, gt=0)
+    evaluated_point: EvaluatedPoint | None = None
+    flow_search: FlowSearch | None = None
+    system_hydraulic_feasibility: Literal["not_assessed"] = "not_assessed"
+    risk_assessment: Literal["not_assessed"] = "not_assessed"
+    topology_assessment: str
+    stress_scenarios: list[StressScenarioResult]
+    resolved_scenario: dict[str, Any]
+    input_provenance: dict[str, dict[str, str | None]]
+    model: ModelMetadata
     warnings: list[str]
     blind_spots: list[str] = Field(description="Model limitations always reported to the caller")
     rendered_memo: str = Field(description="Markdown-formatted engineering memo")

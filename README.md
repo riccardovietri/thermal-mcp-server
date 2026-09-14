@@ -5,7 +5,16 @@
 
 # thermal-mcp-server
 
-A Python package and MCP server that exposes simplified liquid-cooled accelerator thermal models as AI-callable tools for rack-level cooling analysis.
+A Python thermal-hydraulic screening engine for engineers evaluating liquid-cooled
+accelerator cold plates and identical-GPU racks. It exposes the same deterministic
+calculations through Python and MCP, with explicit assumptions and model limits.
+
+**How the physics works:** start with the [representative eight-GPU walkthrough](docs/representative-walkthrough.md)
+or the [governing equations and worked example](docs/model_overview.md).
+The [detailed model](docs/physics.md) documents the correlations and derivations;
+the [evidence matrix](docs/assumptions.md#claim-and-evidence-matrix) separates equation
+verification from hardware validation. Python evaluates these equations; no LLM
+predicts temperatures or pressure drops.
 
 ## What It Models
 
@@ -14,7 +23,7 @@ A Python package and MCP server that exposes simplified liquid-cooled accelerato
 - Darcy-Weisbach pressure drop with simple laminar, transition, and turbulent handling.
 - Water and 50/50 glycol comparisons using fixed nominal properties.
 - Identical-GPU racks in series or parallel topology.
-- First-pass CDU flow, pressure-drop, return-temperature, and junction-temperature sizing.
+- Rack flow, cold-plate pressure-drop, return-temperature, and junction-temperature screening.
 - Public accelerator reference cases with explicit source and estimate labels.
 
 ## What It Does Not Model
@@ -113,7 +122,7 @@ python examples/mcp_client_demo.py
 | `compare_coolants` | Water vs 50/50 glycol comparison at identical conditions |
 | `optimize_flow_rate` | Minimum flow search for a junction-temperature target |
 | `analyze_rack` | Identical-GPU rack analysis in series or parallel topology |
-| `generate_decision_report` | First-pass sizing memo with flow band, risk, uncertainty, and model blind spots |
+| `generate_decision_report` | Versioned thermal screening report with evaluated points, scoped search results, stress scenarios, provenance, and blind spots |
 
 See [`docs/mcp.md`](docs/mcp.md) for tool contracts.
 
@@ -147,11 +156,11 @@ See [`docs/public_specs.md`](docs/public_specs.md) and
 
 ## Tests
 
-The current suite has 75 tests:
+The test suite covers:
 
 - Physics behavior and hand-calculation checks.
 - MCP wrapper contracts and error envelopes.
-- Decision report behavior, including rack-aware feasibility.
+- Decision report behavior, including fixed-flow preservation, unavailable rack results, and scoped thermal feasibility.
 - Smoke tests for `examples/quickstart.py`, `examples/rack_sizing_example.py`,
   and `examples/mcp_client_demo.py`.
 
@@ -190,4 +199,4 @@ This project started as a way to explore how AI assistants can call lightweight
 engineering models directly instead of only producing static text. The package
 exposes simplified liquid-cooling calculations through Python and MCP tools,
 making it possible to ask design-tradeoff questions about accelerator cooling,
-rack-level CDU sizing, and coolant topology in a reproducible way.
+rack flow and temperature screening, and coolant topology in a reproducible way.

@@ -1,8 +1,9 @@
-"""Real-world thermal benchmarks for datacenter GPU cold plates.
+"""Public-reference thermal screening studies for datacenter GPU cold plates.
 
 Uses verified TDP specs from vendor datasheets to answer practical
-thermal engineering questions: pump sizing, coolant selection, inlet
-temperature limits, and cooling capacity requirements.
+thermal engineering questions about modeled flow, coolant selection, inlet
+temperature limits, and cold-plate performance. These are not hardware validation
+benchmarks; package resistances and some limits are estimates or proxies.
 
 Run: python examples/real_chip_benchmarks.py
 """
@@ -50,14 +51,14 @@ ALL_CHIPS = [H100_SXM, B200_NVL72, MI300X, GAUDI3_AIR, GAUDI3_LIQUID]
 def benchmark_h100_flow_sweep() -> dict[str, object]:
     """Sweep flow rates to find the minimum that keeps Tj < 83°C.
 
-    Decision: What's the minimum flow rate to keep Tj < 83°C? This sizes the pump.
+    Decision: What cold-plate flow first meets Tj < 83°C in this model?
     """
     chip = H100_SXM
     inlet_c = 35.0
     flow_rates = list(range(2, 16))  # 2 to 15 LPM in 1 LPM increments
 
     print("=" * 72)
-    print(f"Benchmark 1: {chip.name} — Minimum Flow Rate Sizing")
+    print(f"Reference study 1: {chip.name} — Modeled Thermal Flow Search")
     print(f"  TDP: {chip.tdp_w} W | Coolant: water | Inlet: {inlet_c}°C")
     print(f"  Target: Tj < {chip.tj_limit_c}°C ({chip.tj_source})")
     print("-" * 72)
@@ -307,8 +308,8 @@ def benchmark_gaudi3_flow_optimization() -> dict[str, object]:
             }
         else:
             print(f"  {chip.name} ({chip.tdp_w:.0f}W):")
-            print(f"    Cannot meet {tj_limit}°C even at {inlet_25}°C inlet")
-            print("    Cold plate redesign required for this power class")
+            print(f"    No passing point through {flow_max:.0f} LPM at {inlet_25}°C inlet")
+            print("    Evaluate geometry, resistance inputs, or another cooling architecture")
             configs[chip.name] = {"tdp_w": chip.tdp_w, "min_flow_lpm": None}
 
     air = configs.get("Gaudi 3 OAM (air)", {})
@@ -326,10 +327,9 @@ def benchmark_gaudi3_flow_optimization() -> dict[str, object]:
         )
     elif air_flow is not None and liq_flow is None:
         print(f"  At {inlet_25}°C inlet, air-cooled OAM ({GAUDI3_AIR.tdp_w:.0f}W) needs {air_flow:.1f} LPM with default geometry.")
-        print(f"  Liquid-cooled OAM ({GAUDI3_LIQUID.tdp_w:.0f}W) still exceeds what this cold plate geometry can handle — redesign needed.")
+        print(f"  Liquid-cooled OAM ({GAUDI3_LIQUID.tdp_w:.0f}W) has no passing point through {flow_max:.0f} LPM with the same assumptions.")
     elif air_flow is None and liq_flow is None:
-        print(f"  Neither variant achievable at {inlet_25}°C with default geometry.")
-        print("  Cold plate redesign required for 900W+ class GPUs.")
+        print(f"  Neither variant has a passing point through {flow_max:.0f} LPM with the default geometry at {inlet_25}°C.")
     print()
 
     return {"configs": configs}
@@ -344,8 +344,8 @@ def print_summary() -> None:
     """Print a summary table across all chips at their optimal operating points.
 
     Uses an extended flow range (1–100 LPM) to find solutions where possible.
-    Chips that cannot meet their Tj limit with the default cold plate geometry
-    at any flow rate are marked as needing geometry redesign.
+    Chips that do not meet their Tj limit with the default cold plate geometry
+    within the search interval are marked as having no passing point.
     """
     inlet_c = 35.0
     flow_max = 100.0
@@ -375,11 +375,11 @@ def print_summary() -> None:
                 f"{result.pressure_drop_pa / 1000:>9.1f}"
             )
         else:
-            print(f"  {chip.name:<22}  {chip.tdp_w:>8.0f}  {chip.tj_limit_c:>6.0f}°  {'redesign':>9}  {'N/A':>8}  {'N/A':>9}")
+            print(f"  {chip.name:<22}  {chip.tdp_w:>8.0f}  {chip.tj_limit_c:>6.0f}°  {'no pass':>9}  {'N/A':>8}  {'N/A':>9}")
 
     print("-" * 72)
-    print("  'redesign' = default cold plate geometry cannot meet target at any flow rate.")
-    print("  These chips require larger contact area, more channels, or lower R_jc.")
+    print(f"  'no pass' = no point from 1 to {flow_max:.0f} LPM met the model criterion.")
+    print("  Geometry, resistance assumptions, inlet temperature, or architecture may need revision.")
     print()
 
 

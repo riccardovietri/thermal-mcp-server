@@ -1,7 +1,7 @@
 import pytest
 
 from thermal_mcp_server.physics import analyze, analyze_rack, compute_sensitivity, optimize_flow
-from thermal_mcp_server.schemas import AnalyzeColdplateInput, AnalyzeRackInput, OptimizeFlowRateInput
+from thermal_mcp_server.schemas import AnalyzeColdplateInput, AnalyzeRackInput, Geometry, OptimizeFlowRateInput
 
 
 def test_tj_monotonic_with_flow():
@@ -33,6 +33,156 @@ def test_pressure_drop_superlinear_vs_flow():
     ratio2 = c.pressure_drop_pa / b.pressure_drop_pa
     assert ratio1 > 1.1
     assert ratio2 > 1.1
+
+
+@pytest.mark.parametrize(
+    ("flow_lpm", "expected_re", "expected_dp_pa", "expected_regime"),
+    [
+        # Independent Darcy-Weisbach calculation with f = 64 / Re.
+        (1.0, 466.760300, 949.333, "laminar"),
+        # Independent calculation using the documented linear transition blend.
+        (8.0, 3734.082397, 16800.347, "transitional"),
+        # Independent Darcy-Weisbach calculation with Blasius friction.
+        (10.0, 4667.602996, 26503.038, "turbulent"),
+    ],
+)
+def test_darcy_weisbach_absolute_values_across_regimes(
+    flow_lpm: float,
+    expected_re: float,
+    expected_dp_pa: float,
+    expected_regime: str,
+):
+    """Verify the implementation against independent literal Darcy calculations.
+
+    These are equation-verification tests: they prove that the current declared
+    friction-factor equations and unit conversions are implemented as intended.
+    They do not validate those correlations for a physical cold plate.
+    """
+    result = analyze(AnalyzeColdplateInput(flow_rate_lpm=flow_lpm, coolant="water"))
+
+    assert result.reynolds == pytest.approx(expected_re, abs=1e-3)
+    assert result.pressure_drop_pa == pytest.approx(expected_dp_pa, abs=0.01)
+    assert result.regime == expected_regime
+
+
+@pytest.mark.parametrize(
+    ("flow_lpm", "expected_re", "expected_dp_pa"),
+    [
+        # Re = 2300 and f = 64 / 2300 at the lower transition endpoint.
+        (4.927582748244734, 2300.0, 4677.918556),
+        # Re = 4000 and f = 0.3164 * Re**-0.25 at the upper endpoint.
+        (8.569709127382145, 4000.0, 20229.553904),
+    ],
+)
+def test_darcy_transition_endpoints_are_continuous(flow_lpm: float, expected_re: float, expected_dp_pa: float):
+    """Verify the declared transition interpolation reaches both endpoints.
+
+    Continuity is a software property of the chosen blend, not evidence that
+    the blend is a physically validated transition correlation.
+    """
+    result = analyze(AnalyzeColdplateInput(flow_rate_lpm=flow_lpm, coolant="water"))
+
+    assert result.reynolds == pytest.approx(expected_re, abs=1e-9)
+    assert result.pressure_drop_pa == pytest.approx(expected_dp_pa, abs=0.01)
+    assert result.regime == "transitional"
+
+
+def test_darcy_weisbach_rectangular_hydraulic_diameter_passthrough():
+    """Verify Dh and channel-area handling for a non-square channel geometry.
+
+    The expected values are an independent calculation of the current
+    rectangular-channel equations; this does not establish correlation
+    validity for rectangular ducts.
+    """
+    geometry = Geometry(
+        channel_count=20,
+        channel_width_m=2.0e-3,
+        channel_height_m=1.0e-3,
+        channel_length_m=0.08,
+    )
+    result = analyze(AnalyzeColdplateInput(flow_rate_lpm=8.0, coolant="water", geometry=geometry))
+
+    # A = 20 * 0.002 * 0.001 = 4.0e-5 m², v = 3.333333 m/s,
+    # Dh = 2*0.002*0.001/(0.002+0.001) = 0.001333333 m.
+    assert result.reynolds == pytest.approx(4978.776529, abs=1e-3)
+    assert result.pressure_drop_pa == pytest.approx(12517.849334, abs=0.01)
+    assert result.regime == "turbulent"
+
+
+def test_darcy_weisbach_glycol_uses_declared_properties():
+    """Verify the glycol branch with independent nominal-property arithmetic."""
+    result = analyze(AnalyzeColdplateInput(flow_rate_lpm=8.0, coolant="glycol50"))
+
+    # rho=1060 kg/m³, mu=0.0048 Pa·s, v=3.333333 m/s, Dh=0.001 m.
+    # Re=736.111111, f=64/Re=0.086943396, ΔP=40960 Pa.
+    assert result.reynolds == pytest.approx(736.111111, abs=1e-3)
+    assert result.pressure_drop_pa == pytest.approx(40960.0, abs=0.01)
+    assert result.regime == "laminar"
+
+
+def test_single_plate_coolant_energy_balance():
+    """Verify Q = m_dot * cp * coolant rise for the no-loss model boundary."""
+    heat_load_w = 700.0
+    flow_lpm = 8.0
+    rho_kg_m3 = 997.0
+    cp_j_kgk = 4180.0
+    mass_flow_kg_s = (flow_lpm / 60000.0) * rho_kg_m3
+
+    result = analyze(
+        AnalyzeColdplateInput(
+            heat_load_w=heat_load_w,
+            flow_rate_lpm=flow_lpm,
+            coolant="water",
+        )
+    )
+
+    expected_rise_c = heat_load_w / (mass_flow_kg_s * cp_j_kgk)
+    assert result.coolant_rise_c == pytest.approx(expected_rise_c, abs=1e-9)
+    assert mass_flow_kg_s * cp_j_kgk * result.coolant_rise_c == pytest.approx(heat_load_w, rel=1e-12)
+
+
+def test_analyze_warns_when_result_uses_unvalidated_applicability_assumptions():
+    """Applicability warnings accompany nominal outputs without changing them."""
+    result = analyze(AnalyzeColdplateInput(flow_rate_lpm=8.0, inlet_temp_c=25.0))
+
+    warnings = " ".join(result.warnings).lower()
+    assert "transitional-flow correlation" in warnings
+    assert "rectangular-channel correlations" in warnings
+    assert "effective heated-area" in warnings
+    assert "no measured cold-plate validation" in warnings
+
+
+def test_analyze_warns_when_inlet_differs_from_property_reference():
+    """Non-reference inlet temperatures disclose fixed nominal properties."""
+    result = analyze(AnalyzeColdplateInput(flow_rate_lpm=10.0, inlet_temp_c=35.0))
+
+    assert any("nominal 25°C values" in warning for warning in result.warnings)
+
+
+def test_analyze_does_not_warn_property_reference_at_25c():
+    """The property-reference warning is specific to an off-reference inlet."""
+    result = analyze(AnalyzeColdplateInput(flow_rate_lpm=10.0, inlet_temp_c=25.0))
+
+    assert not any("nominal 25°C values" in warning for warning in result.warnings)
+
+
+def test_rack_deduplicates_shared_applicability_warnings():
+    """Rack results retain shared warnings once instead of repeating per GPU."""
+    result = analyze_rack(
+        AnalyzeRackInput(
+            gpu_count=4,
+            topology="series",
+            heat_load_per_gpu_w=700.0,
+            total_flow_lpm=8.0,
+            cdu_supply_temp_c=25.0,
+            coolant="water",
+        )
+    )
+
+    measured_warnings = [warning for warning in result.warnings if "no measured cold-plate validation" in warning]
+    rectangular_warnings = [warning for warning in result.warnings if "rectangular-channel correlations" in warning]
+    assert len(measured_warnings) == 1
+    assert len(rectangular_warnings) == 1
 
 
 def test_invalid_inputs_rejected():
@@ -375,8 +525,9 @@ def test_sensitivity_dtj_dt_inlet_is_one():
 
 
 def test_sensitivity_r_jc_uncertainty_hand_calc():
-    """R_jc ±20% → Tj uncertainty = ±(0.2 × R_jc × Q).
+    """An illustrative centered R_jc perturbation gives ±(0.2 × R_jc × Q).
 
+    This is a model delta, not a manufacturing tolerance or probability bound.
     For R_jc=0.04 K/W, Q=700W: ±(0.008 × 700) = ±5.6°C.
     """
     inp = AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, r_jc_k_per_w=0.04)
@@ -386,13 +537,14 @@ def test_sensitivity_r_jc_uncertainty_hand_calc():
 
 
 def test_sensitivity_r_tim_aged_hand_calc():
-    """R_tim aging (doubling) → Tj rise = R_tim_original × Q.
+    """A doubled-R_tim scenario gives Tj rise = R_tim_original × Q.
 
+    This is an illustrative model scenario, not a field-aging prediction.
     For R_tim=0.02 K/W, Q=700W: rise = 0.02 × 700 = 14.0°C.
     """
     inp = AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, r_tim_k_per_w=0.02)
     sens = compute_sensitivity(inp)
-    expected_delta = 0.02 * 700  # = 14.0°C (R_tim doubles → Q * R_tim_orig extra)
+    expected_delta = 0.02 * 700  # = 14.0°C (doubled R_tim adds Q * R_tim_orig)
     assert abs(sens.r_tim_aged_delta_c - expected_delta) < 0.01, f"r_tim_aged_delta={sens.r_tim_aged_delta_c:.3f}, expected {expected_delta:.3f}"
 
 

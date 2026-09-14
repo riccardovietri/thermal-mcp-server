@@ -49,7 +49,7 @@ async def main() -> None:
         )
         _show("call analyze_coldplate(700 W, 8 LPM, water) ->", analyze.data)
 
-        # 2) Decision memo — composes optimization + sensitivity + blind spots.
+        # 2) Fixed-flow screening — preserves the same 8 LPM/GPU operating point.
         report = await client.call_tool(
             "generate_decision_report",
             {
@@ -59,14 +59,21 @@ async def main() -> None:
                 "topology": "parallel",
                 "target_junction_temp_c": 83.0,
                 "coolant": "water",
+                "flow_rate_lpm": 8.0,
             },
         )
         data = report.data
         print("call generate_decision_report(8x H100 SXM, parallel) ->")
-        print(f"  feasible:           {data['feasible']}")
-        print(f"  risk_level:         {data['risk_level']}")
-        print(f"  recommended_flow:   {data['recommended_flow']['recommended_lpm']:.2f} LPM/GPU")
-        print(f"  Tj at recommended:  {data['junction_temp_at_recommended_c']:.1f} deg C")
+        print(f"  schema version:     {data['report_schema_version']}")
+        print(f"  status:             {data['status']}")
+        point = data["evaluated_point"]
+        if point is None:
+            print("  evaluated point:    unavailable")
+        else:
+            print(f"  evaluated flow:     {point['flow_lpm_per_gpu']:.2f} LPM/GPU")
+            print(f"  evaluated Tj:       {point['junction_temp_c']:.1f} deg C")
+            print(f"  guarded margin:     {point['margin_to_criterion_c']:.1f} deg C")
+        print(f"  system hydraulics:  {data['system_hydraulic_feasibility']}")
         print(f"  blind spots listed: {len(data['blind_spots'])}")
 
 

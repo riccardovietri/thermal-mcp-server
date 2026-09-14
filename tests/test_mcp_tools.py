@@ -243,3 +243,70 @@ def test_analyze_rack_geometry_passthrough():
         geometry={"channel_count": 20},  # higher velocity → better convection → lower Tj
     )
     assert custom_out["max_junction_temp_c"] != default_out["max_junction_temp_c"]
+
+
+def test_report_v2_preserves_default_and_supplied_provenance():
+    from thermal_mcp_server.decision_report import generate_decision_report
+    from thermal_mcp_server.schemas import DecisionScenario
+
+    supplied = {
+        "heat_load_w": 700.0,
+        "flow_rate_lpm": 8.0,
+        "geometry": {"channel_count": 40},
+        "input_source_notes": {
+            "heat_load_w": "Owner supplied scenario; not a measured load",
+            "stress_scenarios.heat_load_delta_w": "Owner supplied stress case",
+        },
+        "stress_scenarios": {"heat_load_delta_w": 25.0},
+    }
+    direct = generate_decision_report(DecisionScenario(**supplied)).model_dump(mode="json")
+    wrapped = mcp_server.generate_decision_report_impl(**supplied)
+    assert wrapped == direct
+    provenance = wrapped["input_provenance"]
+    assert provenance["heat_load_w"]["origin"] == "supplied"
+    assert provenance["inlet_temp_c"]["origin"] == "defaulted"
+    assert provenance["geometry.channel_count"]["origin"] == "supplied"
+    assert provenance["geometry.channel_width_m"]["origin"] == "defaulted"
+    assert provenance["stress_scenarios.heat_load_delta_w"] == {
+        "origin": "supplied",
+        "source_note": "Owner supplied stress case",
+    }
+    assert provenance["stress_scenarios.r_tim_multiplier"]["origin"] == "defaulted"
+    assert wrapped["evaluated_point"]["flow_lpm_per_gpu"] == 8.0
+    assert wrapped["report_schema_version"] == 2
+    assert "recommended_flow" not in wrapped
+    assert "risk_level" not in wrapped
+
+
+def test_report_mcp_transport_preserves_omission_and_null_results():
+    import asyncio
+
+    from fastmcp import Client
+
+    async def exercise():
+        async with Client(mcp_server.mcp) as client:
+            omitted = (await client.call_tool("generate_decision_report", {"flow_rate_lpm": 8.0})).data
+            explicit = (await client.call_tool("generate_decision_report", {"flow_rate_lpm": 8.0, "heat_load_w": 700.0})).data
+            unknown = (
+                await client.call_tool(
+                    "generate_decision_report",
+                    {"flow_rate_lpm": 8.0, "gpu_count": 256, "topology": "series"},
+                )
+            ).data
+            invalid = (await client.call_tool("generate_decision_report", {"margin_c": 100.0})).data
+        return omitted, explicit, unknown, invalid
+
+    omitted, explicit, unknown, invalid = asyncio.run(exercise())
+    assert omitted["input_provenance"]["heat_load_w"]["origin"] == "defaulted"
+    assert explicit["input_provenance"]["heat_load_w"]["origin"] == "supplied"
+    assert omitted["evaluated_point"] == explicit["evaluated_point"]
+    assert unknown["status"] == "undetermined"
+    assert unknown["evaluated_point"] is None
+    assert unknown["attempted_flow_lpm_per_gpu"] == 8.0
+    assert unknown["system_hydraulic_feasibility"] == "not_assessed"
+    assert invalid["error"]
+
+
+def test_report_mcp_rejects_unknown_stress_parameters():
+    result = mcp_server.generate_decision_report_impl(stress_scenarios={"service_life_years": 3})
+    assert "error" in result
