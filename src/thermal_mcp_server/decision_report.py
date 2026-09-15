@@ -128,31 +128,39 @@ def _evaluate_at_flow(
     scenario: DecisionScenario,
     flow_lpm_per_gpu: float,
     role: EvaluatedPointRole,
-) -> tuple[EvaluatedPoint | None, str | None]:
+) -> tuple[EvaluatedPoint | None, list[str], str | None]:
     try:
         if scenario.gpu_count == 1:
             result = analyze(_make_coldplate_input(scenario, flow_lpm_per_gpu))
-            return _point(
+            return (
+                _point(
+                    scenario,
+                    flow_lpm_per_gpu,
+                    result.junction_temp_c,
+                    result.pressure_drop_pa,
+                    result.pump_power_w,
+                    scenario.inlet_temp_c + result.coolant_rise_c,
+                    role,
+                ),
+                result.warnings,
+                None,
+            )
+        rack = analyze_rack(_make_rack_input(scenario, flow_lpm_per_gpu))
+        return (
+            _point(
                 scenario,
                 flow_lpm_per_gpu,
-                result.junction_temp_c,
-                result.pressure_drop_pa,
-                result.pump_power_w,
-                scenario.inlet_temp_c + result.coolant_rise_c,
+                rack.max_junction_temp_c,
+                rack.total_pressure_drop_pa,
+                rack.total_pump_power_w,
+                rack.cdu_outlet_temp_c,
                 role,
-            ), None
-        rack = analyze_rack(_make_rack_input(scenario, flow_lpm_per_gpu))
-        return _point(
-            scenario,
-            flow_lpm_per_gpu,
-            rack.max_junction_temp_c,
-            rack.total_pressure_drop_pa,
-            rack.total_pump_power_w,
-            rack.cdu_outlet_temp_c,
-            role,
-        ), None
+            ),
+            rack.warnings,
+            None,
+        )
     except ValidationError:
-        return None, "Rack evaluation unavailable: downstream inlet exceeds the supported input bound."
+        return None, [], "Rack evaluation unavailable: downstream inlet exceeds the supported input bound."
 
 
 def _topology_assessment(scenario: DecisionScenario, flow_lpm_per_gpu: float | None) -> str:
@@ -175,10 +183,10 @@ def _topology_assessment(scenario: DecisionScenario, flow_lpm_per_gpu: float | N
     except ValidationError:
         return "Topology comparison unavailable because the series case exceeds the supported downstream inlet bound."
     return (
-        f"At {flow_lpm_per_gpu:.6g} LPM/GPU, series Tj_max={series.max_junction_temp_c:.6g}°C and "
-        f"parallel Tj_max={parallel.max_junction_temp_c:.6g}°C. "
-        f"Series cold-plate-only ΔP={series.total_pressure_drop_pa:.6g} Pa; "
-        f"parallel cold-plate-only ΔP={parallel.total_pressure_drop_pa:.6g} Pa. "
+        f"At {flow_lpm_per_gpu:.3f} LPM/GPU, series Tj_max={series.max_junction_temp_c:.2f}°C and "
+        f"parallel Tj_max={parallel.max_junction_temp_c:.2f}°C. "
+        f"Series cold-plate-only ΔP={series.total_pressure_drop_pa / 1000:.2f} kPa; "
+        f"parallel cold-plate-only ΔP={parallel.total_pressure_drop_pa / 1000:.2f} kPa. "
         "This comparison uses a common per-GPU flow; it does not select a topology or assess system hydraulics."
     )
 
@@ -256,6 +264,14 @@ def _evaluate_stresses(
             perturbed = inlet_temp + change
             base_value = inlet_temp
             inlet_temp = perturbed
+        if baseline is None:
+            unavailable_reason = "No valid evaluated point is available for stress evaluation."
+        elif baseline.role == "search_bound_diagnostic" or not allow_evaluation:
+            unavailable_reason = "Stress evaluation is not run on a search-bound diagnostic point."
+        elif flow_lpm_per_gpu is None:
+            unavailable_reason = "No evaluated flow is available for stress evaluation."
+        else:
+            unavailable_reason = "Stress evaluation is unavailable for this point."
         if not allow_evaluation or flow_lpm_per_gpu is None or baseline is None:
             results.append(
                 StressScenarioResult(
@@ -265,7 +281,7 @@ def _evaluate_stresses(
                     base_value=base_value,
                     perturbed_value=perturbed,
                     units=units,
-                    reason="No selected operating point is available for stress evaluation.",
+                    reason=unavailable_reason,
                 )
             )
             continue
@@ -324,23 +340,24 @@ def _render_memo(report: DecisionReport) -> str:
             [
                 f"## Evaluated Point ({point.role})",
                 "",
-                f"- **Flow:** {point.flow_lpm_per_gpu:.12g} LPM/GPU",
-                f"- **Supply temperature:** {point.supply_temp_c:.12g}°C",
-                f"- **Junction temperature:** {point.junction_temp_c:.12g}°C",
-                f"- **Margin to criterion:** {point.margin_to_criterion_c:.12g}°C",
-                f"- **Margin to limit:** {point.margin_to_limit_c:.12g}°C",
+                f"- **Flow:** {point.flow_lpm_per_gpu:.3f} LPM/GPU",
+                f"- **Supply temperature:** {point.supply_temp_c:.2f}°C",
+                f"- **Junction temperature:** {point.junction_temp_c:.2f}°C",
+                f"- **Margin to criterion:** {point.margin_to_criterion_c:.2f}°C",
+                f"- **Margin to limit:** {point.margin_to_limit_c:.2f}°C",
+                "- **Display precision:** rounded for the memo; structured fields retain calculation precision.",
                 "",
             ]
         )
     if report.flow_search is not None:
         search = report.flow_search
-        minimum = "null" if search.minimum_feasible_lpm_per_gpu is None else f"{search.minimum_feasible_lpm_per_gpu:.12g}"
+        minimum = "null" if search.minimum_feasible_lpm_per_gpu is None else f"{search.minimum_feasible_lpm_per_gpu:.3f} LPM/GPU"
         lines.extend(
             [
                 "## Flow Search",
                 "",
                 f"- **Scope:** `{search.scope}`",
-                f"- **Range:** {search.min_lpm_per_gpu:.12g}–{search.max_lpm_per_gpu:.12g} LPM/GPU",
+                f"- **Range:** {search.min_lpm_per_gpu:.3f}–{search.max_lpm_per_gpu:.3f} LPM/GPU",
                 f"- **Minimum feasible flow:** {minimum}",
                 "",
             ]
@@ -348,7 +365,7 @@ def _render_memo(report: DecisionReport) -> str:
     lines.extend(["## Topology Assessment", "", report.topology_assessment, "", "## Stress Scenarios", ""])
     for stress in report.stress_scenarios:
         if stress.status == "evaluated":
-            lines.append(f"- **{stress.name}:** ΔTj {stress.signed_junction_delta_c:+.12g}°C")
+            lines.append(f"- **{stress.name}:** ΔTj {stress.signed_junction_delta_c:+.2f}°C")
         else:
             lines.append(f"- **{stress.name}:** unavailable — {stress.reason}")
     lines.extend(["", "## Warnings", ""])
@@ -371,7 +388,8 @@ def generate_decision_report(scenario: DecisionScenario) -> DecisionReport:
     allow_stress = False
 
     if scenario.flow_rate_lpm is not None:
-        evaluated_point, reason = _evaluate_at_flow(scenario, scenario.flow_rate_lpm, "fixed_input")
+        evaluated_point, physics_warnings, reason = _evaluate_at_flow(scenario, scenario.flow_rate_lpm, "fixed_input")
+        warnings.extend(physics_warnings)
         if evaluated_point is None:
             status = DecisionStatus.UNDETERMINED
             warnings.append(reason or "Operating-point evaluation unavailable.")
@@ -406,8 +424,8 @@ def generate_decision_report(scenario: DecisionScenario) -> DecisionReport:
             r_tim_k_per_w=scenario.r_tim_k_per_w,
             geometry=_resolve_geometry(scenario.geometry),
         )
-        lower_point, _ = _evaluate_at_flow(scenario, _FLOW_MIN_LPM, "search_bound_diagnostic")
-        upper_point, upper_reason = _evaluate_at_flow(scenario, _FLOW_MAX_LPM, "search_bound_diagnostic")
+        lower_point, _, _ = _evaluate_at_flow(scenario, _FLOW_MIN_LPM, "search_bound_diagnostic")
+        upper_point, upper_warnings, upper_reason = _evaluate_at_flow(scenario, _FLOW_MAX_LPM, "search_bound_diagnostic")
         min_flow, optimization_result = optimize_flow(optimizer)
         lower_pass = lower_point is not None and lower_point.meets_thermal_target
         upper_pass = upper_point is not None and upper_point.meets_thermal_target
@@ -431,6 +449,7 @@ def generate_decision_report(scenario: DecisionScenario) -> DecisionReport:
         if not candidate_found:
             if scenario.gpu_count == 1 or scenario.topology == "parallel":
                 evaluated_point = upper_point
+                warnings.extend(upper_warnings)
                 if upper_reason:
                     warnings.append(upper_reason)
                 status = DecisionStatus.NO_FEASIBLE_FLOW_IN_SEARCH_RANGE
@@ -441,7 +460,8 @@ def generate_decision_report(scenario: DecisionScenario) -> DecisionReport:
         else:
             attempted_flow = min_flow
             role: EvaluatedPointRole = "thermal_search_result" if scenario.gpu_count == 1 or scenario.topology == "parallel" else "series_candidate"
-            evaluated_point, reason = _evaluate_at_flow(scenario, min_flow, role)
+            evaluated_point, physics_warnings, reason = _evaluate_at_flow(scenario, min_flow, role)
+            warnings.extend(physics_warnings)
             if evaluated_point is None:
                 status = DecisionStatus.UNDETERMINED
                 warnings.append(reason or "Operating-point evaluation unavailable.")
@@ -449,13 +469,22 @@ def generate_decision_report(scenario: DecisionScenario) -> DecisionReport:
                 status = DecisionStatus.MEETS_TARGET
                 stress_flow = min_flow
                 allow_stress = True
+                if scope == "single_plate_candidate_for_series":
+                    warnings.append(
+                        "This is a passing single-plate candidate evaluated on the series rack, not a minimum rack flow or operating recommendation."
+                    )
+                else:
+                    warnings.append(
+                        "The minimum feasible flow is the modeled thermal threshold, not an operating recommendation; "
+                        "select operating allowance from system evidence."
+                    )
             else:
                 status = DecisionStatus.UNDETERMINED
+                stress_flow = min_flow
+                allow_stress = True
                 warnings.append("The series candidate fails at the evaluated flow, but no rack-wide search was performed.")
 
     topology_flow = stress_flow or (evaluated_point.flow_lpm_per_gpu if evaluated_point is not None else None)
-    if evaluated_point is not None and status == DecisionStatus.NO_FEASIBLE_FLOW_IN_SEARCH_RANGE:
-        evaluated_point.role = "search_bound_diagnostic"
     topology_assessment = _topology_assessment(scenario, topology_flow)
     stress_results = _evaluate_stresses(
         scenario,

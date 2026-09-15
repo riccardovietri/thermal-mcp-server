@@ -173,6 +173,8 @@ pump curve, new correlation, or measured-accuracy claim is included.
 - Passing/failing/unknown statuses cannot contradict the actual evaluated point.
 - Series candidate failure does not claim that the architecture is infeasible.
 - Unsupported rack/stress results contain no fabricated temperatures or margins.
+- Selected-point physics warnings survive into the structured report and memo.
+- Memo values use readable display precision while structured values retain calculation precision.
 - Input provenance distinguishes defaults from supplied values through Python and MCP.
 - Stress scenarios use signed changes and the actual topology, with no lifetime claims.
 - Independent thermal/hydraulic equation checks pass; tests do not imply hardware validation.

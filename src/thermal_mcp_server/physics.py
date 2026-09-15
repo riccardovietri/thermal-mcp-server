@@ -118,9 +118,6 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     if abs(inp.inlet_temp_c - 25.0) > 1e-9:
         warnings.append("coolant properties are fixed at nominal 25°C values; inlet temperature differs from the property reference")
     warnings.append("no measured cold-plate validation is included; absolute temperature and pressure results are screening estimates")
-    # Generic warning threshold; it is not a caller-specific component limit.
-    if t_j > 85:
-        warnings.append("junction temperature exceeds 85C")
     if re < 500:
         warnings.append("very low Reynolds number; risk of poor flow distribution")
 
@@ -218,15 +215,14 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
     props = COOLANTS[inp.coolant]
     flow_m3s = inp.total_flow_lpm / 1000.0 / 60.0
     effective_ambient = inp.ambient_temp_c if inp.ambient_temp_c is not None else inp.cdu_supply_temp_c
-    per_gpu_warnings: list[str] = []
-    seen_gpu_warnings: set[str] = set()
+    warning_gpu_indices: dict[str, list[int]] = {}
 
-    def add_gpu_warnings(prefix: str, result_warnings: list[str]) -> None:
+    def record_gpu_warnings(gpu_indices: list[int], result_warnings: list[str]) -> None:
         for warning in result_warnings:
-            if warning in seen_gpu_warnings:
-                continue
-            seen_gpu_warnings.add(warning)
-            per_gpu_warnings.append(f"{prefix}: {warning}")
+            recorded = warning_gpu_indices.setdefault(warning, [])
+            for gpu_index in gpu_indices:
+                if gpu_index not in recorded:
+                    recorded.append(gpu_index)
 
     if inp.topology == "series":
         flow_per_gpu_lpm = inp.total_flow_lpm
@@ -252,7 +248,7 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
                 # constant fluid properties (no temperature dependence).
                 dp_single = result.pressure_drop_pa
             current_inlet += result.coolant_rise_c
-            add_gpu_warnings(f"GPU {i}", result.warnings)
+            record_gpu_warnings([i], result.warnings)
 
         # Total system ΔP: cold plates in series add ΔP directly.
         total_dp = dp_single * inp.gpu_count
@@ -282,7 +278,7 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
         cdu_outlet_temp = inp.cdu_supply_temp_c + total_q / (m_dot_total * props.cp_j_kgk)
 
         # All GPUs are identical in parallel; report unique warnings once.
-        add_gpu_warnings("all GPUs", result.warnings)
+        record_gpu_warnings(list(range(inp.gpu_count)), result.warnings)
 
     # ASSUMPTION: 50% pump efficiency (same assumption as single cold plate model).
     total_pump_power = total_dp * flow_m3s / 0.5
@@ -291,9 +287,16 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
     hottest_idx = tj_list.index(max_tj)
 
     warnings: list[str] = []
-    if max_tj > 85:
-        warnings.append(f"GPU {hottest_idx} (0-indexed) junction temperature {max_tj:.1f}°C exceeds 85°C design ceiling")
-    warnings.extend(per_gpu_warnings)
+    for warning, gpu_indices in warning_gpu_indices.items():
+        if len(gpu_indices) == inp.gpu_count:
+            scope = "all GPUs"
+        elif len(gpu_indices) == 1:
+            scope = f"GPU {gpu_indices[0]}"
+        elif gpu_indices == list(range(gpu_indices[0], gpu_indices[-1] + 1)):
+            scope = f"GPUs {gpu_indices[0]}–{gpu_indices[-1]} ({len(gpu_indices)}/{inp.gpu_count})"
+        else:
+            scope = f"GPUs {','.join(str(index) for index in gpu_indices)} ({len(gpu_indices)}/{inp.gpu_count})"
+        warnings.append(f"{scope}: {warning}")
 
     return AnalyzeRackOutput(
         topology=inp.topology,

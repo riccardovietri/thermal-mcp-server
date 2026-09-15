@@ -74,6 +74,7 @@ def test_successful_single_plate_search_reports_model_minimum_without_multiplier
     assert report.evaluated_point.role == "thermal_search_result"
     assert report.evaluated_point.flow_lpm_per_gpu == pytest.approx(report.flow_search.minimum_feasible_lpm_per_gpu)
     assert report.evaluated_point.meets_thermal_target is True
+    assert any("not an operating recommendation" in warning for warning in report.warnings)
 
 
 def test_failed_search_has_no_invented_recommendation():
@@ -88,6 +89,8 @@ def test_failed_search_has_no_invented_recommendation():
     assert report.evaluated_point.role == "search_bound_diagnostic"
     assert report.evaluated_point.flow_lpm_per_gpu == 60.0
     assert report.evaluated_point.meets_thermal_target is False
+    assert all(stress.status == "unavailable" for stress in report.stress_scenarios)
+    assert all("search-bound diagnostic" in (stress.reason or "") for stress in report.stress_scenarios)
 
 
 def test_series_candidate_failure_is_undetermined_not_infeasible():
@@ -101,6 +104,8 @@ def test_series_candidate_failure_is_undetermined_not_infeasible():
     assert report.evaluated_point.role == "series_candidate"
     assert report.evaluated_point.meets_thermal_target is False
     assert any("no rack-wide search" in warning for warning in report.warnings)
+    assert all(stress.status == "evaluated" for stress in report.stress_scenarios)
+    assert all(stress.reason is None for stress in report.stress_scenarios)
 
 
 def test_passing_series_candidate_does_not_claim_minimum_rack_flow():
@@ -112,6 +117,7 @@ def test_passing_series_candidate_does_not_claim_minimum_rack_flow():
     assert report.evaluated_point.meets_thermal_target is True
     assert report.flow_search is not None
     assert report.flow_search.minimum_feasible_lpm_per_gpu is None
+    assert any("not a minimum rack flow" in warning for warning in report.warnings)
 
 
 def test_unsupported_series_rack_has_no_placeholder_point():
@@ -184,6 +190,15 @@ def test_report_carries_model_identity_and_validation_boundary():
     assert "transition" in notices
     assert "rectangular" in notices
     assert "measured" in notices
+
+
+def test_report_propagates_selected_point_physics_warnings():
+    report = generate_decision_report(_scenario(flow_rate_lpm=0.5, target_junction_temp_c=150.0, margin_c=0.0))
+
+    assert report.status == DecisionStatus.MEETS_TARGET
+    assert any("very low Reynolds number" in warning for warning in report.warnings)
+    assert any("no measured cold-plate validation" in warning for warning in report.warnings)
+    assert "very low Reynolds number" in report.rendered_memo
 
 
 def test_report_always_carries_material_blind_spots():
@@ -265,6 +280,17 @@ def test_rendered_memo_matches_structured_status_and_boundaries():
     assert "not assessed" in memo
     assert "Model Blind Spots" in memo
     assert "Recommended Operating Point" not in memo
+
+
+def test_rendered_memo_uses_engineering_display_precision():
+    report = generate_decision_report(_scenario())
+    memo = report.rendered_memo
+
+    assert "**Flow:** 5.499 LPM/GPU" in memo
+    assert "**Junction temperature:** 78.00°C" in memo
+    assert "**Margin to criterion:** 0.00°C" in memo
+    assert "structured fields retain calculation precision" in memo
+    assert "5.499036" not in memo
 
 
 def test_report_is_deterministic():

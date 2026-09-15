@@ -136,7 +136,11 @@ calculation precision so rounding does not reverse target passage.
 Every report also includes `system_hydraulic_feasibility: "not_assessed"`,
 `risk_assessment: "not_assessed"`, resolved inputs, leaf-field `input_provenance`,
 model metadata with `validation_state: "unvalidated"`, signed `stress_scenarios`,
-`topology_assessment`, warnings, blind spots, and `rendered_memo`.
+`topology_assessment`, warnings, blind spots, and `rendered_memo`. Warnings from
+the selected physics evaluation are preserved in the report. Memo values are
+rounded for engineering readability while structured numeric fields retain their
+calculation precision. A successful thermal search reports its modeled threshold;
+it is not an operating recommendation.
 
 ### Migration from the previous report
 

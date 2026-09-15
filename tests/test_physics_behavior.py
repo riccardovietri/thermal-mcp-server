@@ -183,6 +183,19 @@ def test_rack_deduplicates_shared_applicability_warnings():
     rectangular_warnings = [warning for warning in result.warnings if "rectangular-channel correlations" in warning]
     assert len(measured_warnings) == 1
     assert len(rectangular_warnings) == 1
+    assert measured_warnings[0].startswith("all GPUs:")
+    assert rectangular_warnings[0].startswith("all GPUs:")
+    property_warnings = [warning for warning in result.warnings if "nominal 25°C values" in warning]
+    assert len(property_warnings) == 1
+    assert property_warnings[0].startswith("GPUs 1–3 (3/4):")
+
+
+def test_physics_layer_does_not_apply_a_context_free_temperature_limit():
+    """Caller-specific limits belong to the decision layer, not analyze()."""
+    result = analyze(AnalyzeColdplateInput(heat_load_w=1200.0, flow_rate_lpm=8.0))
+
+    assert result.junction_temp_c > 85.0
+    assert not any("85" in warning for warning in result.warnings)
 
 
 def test_invalid_inputs_rejected():
