@@ -147,7 +147,8 @@ def analyze_coldplate(
     Uses a 1D thermal resistance network (junction -> case -> TIM -> base -> convection)
     with Dittus-Boelter convection and Darcy-Weisbach pressure drop.
     Supports water and 50/50 glycol coolants. Returns model-applicability notices
-    alongside temperature and low-Reynolds-number warnings.
+    and low-Reynolds-number warnings. Temperature acceptance requires a caller's
+    component-specific limit or the decision-report tool.
 
     Set sensitivity=True to include finite-difference partial derivatives and
     illustrative perturbations: ∂Tj/∂Q, ∂Tj/∂R_tim, ±20% R_jc variation,
