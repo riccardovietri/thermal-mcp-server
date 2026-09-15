@@ -5,15 +5,18 @@ making changes. For durable project decisions, read `docs/decisions.md`.
 
 ## What this is
 
-A Python MCP server that exposes thermal physics for liquid-cooled GPU cold plates.
+A Python thermal-hydraulic screening engine for liquid-cooled GPU cold plates,
+with a thin MCP interface.
 Target audience: data center thermal engineers, AI infrastructure teams.
-Goal: demonstrate physics credibility and AI-callable engineering tooling at H100/B200 scale.
+Goal: auditable thermal design decisions supported by explicit model assumptions
+and evidence. MCP is an interface, not the product.
 
 ## Architecture in 30 seconds
 
 ```
 schemas.py          ← Pydantic I/O models, validation, defaults
 physics.py          ← All math: 1D resistance network, Dittus-Boelter, Darcy-Weisbach
+decision_report.py  ← Scoped thermal screening, input provenance, stress scenarios
 mcp_server.py       ← FastMCP tool wrappers (thin — no physics here)
 ```
 
@@ -93,7 +96,7 @@ This number appears in README and is checked in `test_hand_calc_validation_defau
 | Name      | ρ (kg/m³) | cp (J/kg·K) | k (W/m·K) | μ (Pa·s) | Notes |
 |-----------|-----------|-------------|-----------|----------|-------|
 | water     | 997       | 4180        | 0.60      | 0.00089  | 25°C nominal |
-| glycol50  | 1060      | 3400        | 0.40      | 0.00480  | Ethylene glycol 50% by vol, 25°C. Propylene glycol: μ ~60-80% higher |
+| glycol50  | 1060      | 3400        | 0.40      | 0.00480  | Ethylene glycol 50% by vol, nominal 25°C |
 
 Adding a coolant requires updating `CoolantName` in `schemas.py` and the `COOLANTS`
 dict in `physics.py` with a cited source for property values.
@@ -113,25 +116,26 @@ Do not change these without a current source citation.
 The original priority gaps are now merged:
 
 1. **Rack-level model** — `analyze_rack()` supports series and parallel
-   topologies. Hand-calc validated. See `docs/physics.md` Section G.
+   topologies. Hand-calc checked, not validated against hardware. See `docs/physics.md` Section G.
 
 2. **MCP test completeness** — error paths, `met_target: False`,
    geometry passthrough, `compare_coolants` depth checks, rack smoke tests,
    and nested validation handling are covered in `tests/test_mcp_tools.py`.
 
-3. **Sensitivity / uncertainty output** — `compute_sensitivity()` provides
-   ∂Tj/∂Q, ∂Tj/∂R_tim, ∂Tj/∂T_inlet and uncertainty deltas. `margin_c`
+3. **Sensitivity / illustrative scenarios** — `compute_sensitivity()` provides
+   ∂Tj/∂Q, ∂Tj/∂R_tim, ∂Tj/∂T_inlet and fixed perturbation deltas. `margin_c`
    is available on `optimize_flow_rate`.
 
-4. **Decision report synthesis** — `generate_decision_report()` composes
-   existing APIs into a first-pass sizing memo with flow band, risk level,
-   uncertainty section, topology rationale, and blind spots.
+4. **Decision report synthesis** — the approved schema-v2 contract replaces
+   heuristic flow bands and risk levels with evaluated points, scoped thermal
+   status, provenance, signed stress scenarios, and explicit unavailable results.
+   See `docs/milestone-1-contract.md` and the migration in `docs/mcp.md`.
 
 ## Current next steps
 
-- Reviewer-facing benchmark reporting in CI
-- Interactive demo polish and Colab reliability
-- Keep model limitations explicit as public visibility increases
+- Complete and review Milestone 1 before starting constrained hydraulic sizing.
+- Keep the governing equations and worked case discoverable in `docs/model_overview.md`.
+- Preserve the distinction between equation verification and measured validation.
 
 ## Ask vs. proceed
 

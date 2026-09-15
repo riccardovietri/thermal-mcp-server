@@ -1,13 +1,15 @@
-"""NVIDIA GB200 NVL72 Rack Thermal Analysis — CDU Specification Guide.
+"""Illustrative GB200 NVL72-style rack thermal screening study.
 
 The GB200 NVL72 (72× B200 GPUs per rack) is the flagship AI training system.
 At 86.4 kW rack TDP, it is the most thermally demanding GPU deployment
-in production today. This example answers the procurement question:
+This public-reference example asks a bounded architecture question:
 
-    "What CDU do I need to cool a GB200 NVL72 rack?"
+    "What rack flow and cold-plate pressure does this simplified model predict?"
 
-Outputs CDU spec (flow rate, heat rejection, max ΔP) as a function of
-CDU supply temperature — the primary variable operators can control.
+It reports modeled rack flow, heat load, cold-plate-only pressure drop, and return
+temperature as a function of supply temperature. It cannot specify a CDU because
+manifold losses, pump curves, heat-exchanger performance, and measured component
+data are outside the model.
 
 Run: python examples/nvl72_rack_analysis.py
 
@@ -105,14 +107,14 @@ def section_single_plate_sizing() -> dict[str, float]:
 
 
 # ---------------------------------------------------------------------------
-# Section 2: Full GB200 NVL72 rack — CDU specification
+# Section 2: Full GB200 NVL72-style rack screening
 # ---------------------------------------------------------------------------
 
 
 def section_nvl72_cdu_spec(single_plate_results: dict[str, float]) -> None:
-    """Scale to 72-GPU rack and output CDU procurement spec."""
+    """Scale to 72 GPUs and report modeled rack-side quantities."""
     print("=" * 72)
-    print("Section 2: GB200 NVL72 Rack (72× B200) — CDU Specification")
+    print("Section 2: GB200 NVL72-style Rack (72× B200) — Screening Results")
     print(f"  Total TDP: {NVL72_GPU_COUNT * B200_TDP_W / 1000:.1f} kW | Topology: parallel | Coolant: water")
     print("-" * 72)
     print(f"  {'CDU Supply':>10}  {'Flow (LPM)':>11}  {'Heat Rej':>10}  {'ΔP (kPa)':>9}  {'CDU Return':>11}  {'Tj (°C)':>8}")
@@ -162,16 +164,17 @@ def section_nvl72_cdu_spec(single_plate_results: dict[str, float]) -> None:
 
     print("-" * 72)
 
-    # Best-case CDU spec (25°C supply — typical facility chilled water)
+    # Illustrative 25°C supply point.
     spec_25 = next((s for s in cdu_specs if s["supply_c"] == 25.0), None)
     if spec_25:
         print()
-        print("  CDU PROCUREMENT SPEC (25°C facility supply):")
-        print(f"    Minimum flow rate:   {spec_25['total_flow_lpm']:.0f} L/min")
-        print(f"    Heat rejection:      {spec_25['heat_rejection_kw']:.1f} kW")
-        print(f"    Max cold plate ΔP:   {spec_25['dp_kpa']:.1f} kPa ({spec_25['dp_kpa'] / 100:.2f} bar)")
-        print(f"    CDU return temp:     {spec_25['return_c']:.1f}°C")
+        print("  MODELED RACK-SIDE POINT (25°C supply):")
+        print(f"    Candidate rack flow: {spec_25['total_flow_lpm']:.0f} L/min")
+        print(f"    Modeled heat load:   {spec_25['heat_rejection_kw']:.1f} kW")
+        print(f"    Cold-plate-only ΔP:  {spec_25['dp_kpa']:.1f} kPa ({spec_25['dp_kpa'] / 100:.2f} bar)")
+        print(f"    Rack return temp:    {spec_25['return_c']:.1f}°C")
         print(f"    Max junction temp:   {spec_25['max_tj_c']:.1f}°C ({B200_TJ_LIMIT_C - spec_25['max_tj_c']:+.1f}°C margin)")
+        print("    System hydraulic feasibility: not assessed")
     print()
 
 
@@ -211,8 +214,8 @@ def section_inlet_sensitivity() -> None:
         print(f"  {inlet_c:>9.0f}°C  {rack.max_junction_temp_c:>7.1f}    {margin:>+8.1f}°  {rack.cdu_outlet_temp_c:>10.1f}°C  {status:>12}")
 
     print("-" * 72)
-    print("  3°C margin is a common engineering design target (guard against TIM aging).")
-    print("  WARNING: <3°C margin leaves no headroom for R_tim degradation over time.\n")
+    print("  The 3°C warning threshold is illustrative and is not a reliability criterion.")
+    print("  Validate package/TIM resistance and degradation before setting a guardband.\n")
 
 
 # ---------------------------------------------------------------------------

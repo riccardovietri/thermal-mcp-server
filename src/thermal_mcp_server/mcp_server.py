@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastmcp import FastMCP
@@ -145,12 +146,13 @@ def analyze_coldplate(
 
     Uses a 1D thermal resistance network (junction -> case -> TIM -> base -> convection)
     with Dittus-Boelter convection and Darcy-Weisbach pressure drop.
-    Supports water and 50/50 glycol coolants. Returns warnings if junction temperature
-    exceeds 85C or Reynolds number is dangerously low.
+    Supports water and 50/50 glycol coolants. Returns model-applicability notices
+    and low-Reynolds-number warnings. Temperature acceptance requires a caller's
+    component-specific limit or the decision-report tool.
 
     Set sensitivity=True to include finite-difference partial derivatives and
-    uncertainty bounds: ∂Tj/∂Q, ∂Tj/∂R_tim, ±20% R_jc manufacturing variation,
-    and Tj rise from TIM pump-out degradation (R_tim doubles after 2-3 years).
+    illustrative perturbations: ∂Tj/∂Q, ∂Tj/∂R_tim, ±20% R_jc variation,
+    and Tj rise when R_tim is doubled. These are not measured uncertainty or lifetime estimates.
     """
     return analyze_coldplate_impl(
         heat_load_w,
@@ -213,8 +215,8 @@ def optimize_flow_rate(
 
     margin_c: Optional safety margin in °C. The optimizer targets
     (max_junction_temp_c - margin_c) as the effective ceiling.
-    Recommended: ≥5°C to cover R_jc manufacturing variation (±20%)
-    and TIM degradation over 2-3 years of field service.
+    Choose the guardband from component and operating evidence; the model
+    does not establish a universal margin or service-life forecast.
     """
     return optimize_flow_rate_impl(
         heat_load_w,
@@ -325,99 +327,96 @@ def analyze_rack_tool(
 
 
 def generate_decision_report_impl(
-    chip_label: str = "GPU",
-    heat_load_w: float = 700.0,
-    gpu_count: int = 1,
-    topology: RackTopology = "parallel",
-    target_junction_temp_c: float = 83.0,
-    margin_c: float = 5.0,
-    coolant: CoolantName = "water",
-    inlet_temp_c: float = 25.0,
+    chip_label: str | None = None,
+    heat_load_w: float | None = None,
+    gpu_count: int | None = None,
+    topology: RackTopology | None = None,
+    target_junction_temp_c: float | None = None,
+    margin_c: float | None = None,
+    coolant: CoolantName | None = None,
+    inlet_temp_c: float | None = None,
     flow_rate_lpm: float | None = None,
     geometry: dict[str, Any] | None = None,
-    r_jc_k_per_w: float = 0.04,
-    r_tim_k_per_w: float = 0.02,
+    r_jc_k_per_w: float | None = None,
+    r_tim_k_per_w: float | None = None,
+    stress_scenarios: dict[str, Any] | None = None,
+    input_source_notes: dict[str, str] | None = None,
 ) -> dict:
+    # Domain defaults belong to DecisionScenario so omission remains observable.
+    supplied = {
+        "chip_label": chip_label,
+        "heat_load_w": heat_load_w,
+        "gpu_count": gpu_count,
+        "topology": topology,
+        "target_junction_temp_c": target_junction_temp_c,
+        "margin_c": margin_c,
+        "coolant": coolant,
+        "inlet_temp_c": inlet_temp_c,
+        "flow_rate_lpm": flow_rate_lpm,
+        "geometry": geometry,
+        "r_jc_k_per_w": r_jc_k_per_w,
+        "r_tim_k_per_w": r_tim_k_per_w,
+        "stress_scenarios": stress_scenarios,
+        "input_source_notes": input_source_notes,
+    }
     try:
-        scenario = DecisionScenario(
-            chip_label=chip_label,
-            heat_load_w=heat_load_w,
-            gpu_count=gpu_count,
-            topology=topology,
-            target_junction_temp_c=target_junction_temp_c,
-            margin_c=margin_c,
-            coolant=coolant,
-            inlet_temp_c=inlet_temp_c,
-            flow_rate_lpm=flow_rate_lpm,
-            geometry=_geometry_from_dict(geometry),
-            r_jc_k_per_w=r_jc_k_per_w,
-            r_tim_k_per_w=r_tim_k_per_w,
-        )
+        scenario = DecisionScenario.model_validate({key: value for key, value in supplied.items() if value is not None})
+        return generate_decision_report(scenario).model_dump(mode="json")
     except ValidationError as exc:
-        return {"error": exc.errors()}
-    try:
-        return generate_decision_report(scenario).model_dump()
-    except ValidationError as exc:
-        # Synthesis composes analyze_rack/optimize_flow internally; a
-        # schema-valid scenario can still trigger downstream validation
-        # (e.g. extreme series scenarios). Mirror the analyze_rack_impl
-        # contract: return {"error": ...} instead of raising.
-        return {"error": exc.errors()}
+        return {"error": json.loads(exc.json())}
 
 
 @mcp.tool(name="generate_decision_report")
 def generate_decision_report_tool(
-    chip_label: str = "GPU",
-    heat_load_w: float = 700.0,
-    gpu_count: int = 1,
-    topology: RackTopology = "parallel",
-    target_junction_temp_c: float = 83.0,
-    margin_c: float = 5.0,
-    coolant: CoolantName = "water",
-    inlet_temp_c: float = 25.0,
+    chip_label: str | None = None,
+    heat_load_w: float | None = None,
+    gpu_count: int | None = None,
+    topology: RackTopology | None = None,
+    target_junction_temp_c: float | None = None,
+    margin_c: float | None = None,
+    coolant: CoolantName | None = None,
+    inlet_temp_c: float | None = None,
     flow_rate_lpm: float | None = None,
     geometry: dict[str, Any] | None = None,
-    r_jc_k_per_w: float = 0.04,
-    r_tim_k_per_w: float = 0.02,
+    r_jc_k_per_w: float | None = None,
+    r_tim_k_per_w: float | None = None,
+    stress_scenarios: dict[str, Any] | None = None,
+    input_source_notes: dict[str, str] | None = None,
 ):
-    """Generate a first-pass cooling decision memo for a GPU liquid cooling scenario.
+    """Return a schema-v2 thermal screening report, not a hardware recommendation.
 
-    Synthesizes flow optimization, sensitivity analysis, rack modeling, and
-    uncertainty estimates into a structured engineering recommendation with
-    explicit guardbands and model blind spots always present.
+    Omitted or null arguments use DecisionScenario defaults: 700 W, one GPU,
+    parallel, 83°C limit, 5°C caller guardband, water at 25°C, R_jc=0.04 K/W,
+    R_tim=0.02 K/W, default geometry. Null flow requests a thermal search;
+    a supplied flow is evaluated unchanged in LPM per GPU.
 
-    Returns a feasibility verdict, recommended per-GPU flow band, risk level
-    (LOW/MEDIUM/HIGH based on margin remaining), uncertainty contributors,
-    topology rationale for multi-GPU racks, and a rendered markdown memo.
+    Read status and evaluated_point before using numbers. A failed series
+    candidate does not prove architecture infeasibility. Unavailable results
+    are null; system hydraulic feasibility and overall risk are not assessed.
+    The model has not been validated against measured hardware.
 
-    Args:
-        chip_label: Display label for the chip (e.g. "H100 SXM"). Not validated.
-        heat_load_w: Chip thermal design power in watts.
-        gpu_count: Number of GPUs in the rack (1 = single cold plate analysis).
-        topology: Rack plumbing — "series" or "parallel" (used when gpu_count > 1).
-        target_junction_temp_c: Maximum allowable junction temperature in °C.
-        margin_c: Safety margin in °C subtracted from target before optimization.
-            Recommended ≥5°C to cover R_jc variation (±20%) and TIM aging.
-        coolant: Coolant type — "water" or "glycol50".
-        inlet_temp_c: Coolant supply temperature in °C.
-        flow_rate_lpm: Per-GPU flow rate. If None, auto-optimized to meet target.
-        geometry: Optional cold plate geometry overrides.
-        r_jc_k_per_w: Junction-to-case resistance in K/W.
-        r_tim_k_per_w: TIM resistance in K/W.
+    stress_scenarios accepts r_jc_variation_fraction, r_tim_multiplier,
+    heat_load_delta_w, and supply_temp_delta_c. These are independent,
+    illustrative perturbations, not probability or lifetime predictions.
+    input_source_notes maps input field paths (including geometry fields) to
+    caller-provided provenance notes; supplied values are not automatically
+    verified. Explicit values equal to defaults retain supplied provenance.
     """
     return generate_decision_report_impl(
-        chip_label,
-        heat_load_w,
-        gpu_count,
-        topology,
-        target_junction_temp_c,
-        margin_c,
-        coolant,
-        inlet_temp_c,
-        flow_rate_lpm,
-        geometry,
-        r_jc_k_per_w,
-        r_tim_k_per_w,
+        chip_label=chip_label,
+        heat_load_w=heat_load_w,
+        gpu_count=gpu_count,
+        topology=topology,
+        target_junction_temp_c=target_junction_temp_c,
+        margin_c=margin_c,
+        coolant=coolant,
+        inlet_temp_c=inlet_temp_c,
+        flow_rate_lpm=flow_rate_lpm,
+        geometry=geometry,
+        r_jc_k_per_w=r_jc_k_per_w,
+        r_tim_k_per_w=r_tim_k_per_w,
+        stress_scenarios=stress_scenarios,
+        input_source_notes=input_source_notes,
     )
 
 

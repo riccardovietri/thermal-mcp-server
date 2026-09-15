@@ -32,7 +32,6 @@ class CoolantProperties:
 COOLANTS: dict[CoolantName, CoolantProperties] = {
     "water": CoolantProperties(997.0, 4180.0, 0.60, 0.00089),
     # Ethylene glycol 50% by volume, nominal 25°C properties.
-    # For propylene glycol (lower toxicity), viscosity is ~60-80% higher at 25°C.
     "glycol50": CoolantProperties(1060.0, 3400.0, 0.40, 0.00480),
 }
 
@@ -77,14 +76,14 @@ def _friction_factor(re: float) -> float:
 def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     """Steady-state thermal and hydraulic analysis of a single GPU cold plate.
 
-    Solves a 1D thermal-resistance network from coolant to junction:
-    R_total = R_jc + R_tim + R_base + R_conv (all in K/W). Convection uses a
-    Dittus-Boelter / laminar Nusselt blend over the transition band; the bulk
-    coolant temperature includes half of the coolant temperature rise
-    (ΔT = Q / (ṁ · cp)). Junction temperature is T_j = T_bulk + Q · R_total.
+    The thermal equations are R_total = R_jc + R_tim + R_base + R_conv,
+    ΔT_coolant = Q / (ṁ · cp), and Tj = Tin + 0.5·ΔT_coolant + Q·R_total.
+    Convection uses a Dittus-Boelter / laminar Nusselt blend over the transition
+    band. Pressure drop uses ΔP = f·(L/Dh)·(ρv²/2) with laminar, transitional,
+    or Blasius friction factors.
 
-    Pressure drop is Darcy-Weisbach with a Blasius friction factor over the
-    rectangular-channel hydraulic diameter; pump power assumes 50% efficiency.
+    Pump power assumes a fixed 50% efficiency. Warnings identify applicability
+    limits and evidence gaps; they do not change the numerical result.
 
     Inputs and outputs are in SI-suffixed units (W, LPM, °C, Pa, K/W). See
     docs/physics.md Sections B-E for the governing equations and limitations.
@@ -109,13 +108,16 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
 
     f = _friction_factor(re)
     dp = f * (geom.channel_length_m / dh) * (props.density_kg_m3 * velocity**2 / 2)
-    # ASSUMPTION: 50% pump efficiency (typical centrifugal pump at partial load). Adjust for specific pump curve.
+    # ASSUMPTION: fixed 50% pump efficiency; a pump curve is outside this model.
     pump_power = dp * flow_m3s / 0.5
 
     warnings: list[str] = []
-    # H100 SXM throttle onset is 83°C per NVIDIA thermal guidelines; 85°C used as conservative design ceiling
-    if t_j > 85:
-        warnings.append("junction temperature exceeds 85C")
+    if regime == "transitional":
+        warnings.append("transitional-flow correlation is a numerical blend, not an experimentally validated transition model")
+    warnings.append("rectangular-channel correlations and effective heated-area assumption are unvalidated for this geometry")
+    if abs(inp.inlet_temp_c - 25.0) > 1e-9:
+        warnings.append("coolant properties are fixed at nominal 25°C values; inlet temperature differs from the property reference")
+    warnings.append("no measured cold-plate validation is included; absolute temperature and pressure results are screening estimates")
     if re < 500:
         warnings.append("very low Reynolds number; risk of poor flow distribution")
 
@@ -145,7 +147,10 @@ def compute_sensitivity(inp: AnalyzeColdplateInput) -> SensitivityOutput:
 
     Perturbs one parameter at a time (all others fixed) and reports:
     - Partial derivatives ∂Tj/∂parameter
-    - Engineering uncertainty bounds from known hardware variation
+    - Illustrative deltas from fixed parameter perturbations
+
+    The R_jc and R_tim perturbations are scenarios, not measured tolerances,
+    probability distributions, or lifetime predictions.
 
     Step sizes chosen to be small relative to typical operating ranges while
     avoiding floating-point cancellation errors. model_copy() is used without
@@ -171,22 +176,21 @@ def compute_sensitivity(inp: AnalyzeColdplateInput) -> SensitivityOutput:
     tj_dt = analyze(inp.model_copy(update={"inlet_temp_c": inp.inlet_temp_c + dt})).junction_temp_c
     dtj_dt_inlet = (tj_dt - base_tj) / dt
 
-    # R_jc uncertainty: ±20% manufacturing spread → ±°C Tj swing
-    # (NVIDIA does not publish R_jc tolerances; ±20% is typical for FCBGA packages)
+    # Illustrative centered ±20% R_jc perturbation; not a manufacturing tolerance.
     r_jc_hi = analyze(inp.model_copy(update={"r_jc_k_per_w": inp.r_jc_k_per_w * 1.2})).junction_temp_c
     r_jc_lo = analyze(inp.model_copy(update={"r_jc_k_per_w": inp.r_jc_k_per_w * 0.8})).junction_temp_c
-    r_jc_uncertainty_pm = (r_jc_hi - r_jc_lo) / 2.0
+    r_jc_delta_pm = (r_jc_hi - r_jc_lo) / 2.0
 
-    # TIM degradation: R_tim doubles after 2–3 years of pump-out in field service
-    tj_aged = analyze(inp.model_copy(update={"r_tim_k_per_w": inp.r_tim_k_per_w * 2.0})).junction_temp_c
-    r_tim_aged_delta = tj_aged - base_tj
+    # Illustrative doubled-R_tim scenario; not a field-aging model.
+    tj_doubled_r_tim = analyze(inp.model_copy(update={"r_tim_k_per_w": inp.r_tim_k_per_w * 2.0})).junction_temp_c
+    r_tim_doubled_delta = tj_doubled_r_tim - base_tj
 
     return SensitivityOutput(
         dtj_dq_c_per_w=dtj_dq,
         dtj_dr_tim_c_per_kw=dtj_dr_tim,
         dtj_dt_inlet_dimensionless=dtj_dt_inlet,
-        r_jc_uncertainty_pm_c=r_jc_uncertainty_pm,
-        r_tim_aged_delta_c=r_tim_aged_delta,
+        r_jc_uncertainty_pm_c=r_jc_delta_pm,
+        r_tim_aged_delta_c=r_tim_doubled_delta,
     )
 
 
@@ -211,7 +215,14 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
     props = COOLANTS[inp.coolant]
     flow_m3s = inp.total_flow_lpm / 1000.0 / 60.0
     effective_ambient = inp.ambient_temp_c if inp.ambient_temp_c is not None else inp.cdu_supply_temp_c
-    per_gpu_warnings: list[str] = []
+    warning_gpu_indices: dict[str, list[int]] = {}
+
+    def record_gpu_warnings(gpu_indices: list[int], result_warnings: list[str]) -> None:
+        for warning in result_warnings:
+            recorded = warning_gpu_indices.setdefault(warning, [])
+            for gpu_index in gpu_indices:
+                if gpu_index not in recorded:
+                    recorded.append(gpu_index)
 
     if inp.topology == "series":
         flow_per_gpu_lpm = inp.total_flow_lpm
@@ -237,8 +248,7 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
                 # constant fluid properties (no temperature dependence).
                 dp_single = result.pressure_drop_pa
             current_inlet += result.coolant_rise_c
-            for w in result.warnings:
-                per_gpu_warnings.append(f"GPU {i}: {w}")
+            record_gpu_warnings([i], result.warnings)
 
         # Total system ΔP: cold plates in series add ΔP directly.
         total_dp = dp_single * inp.gpu_count
@@ -268,8 +278,7 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
         cdu_outlet_temp = inp.cdu_supply_temp_c + total_q / (m_dot_total * props.cp_j_kgk)
 
         # All GPUs are identical in parallel; report unique warnings once.
-        for w in result.warnings:
-            per_gpu_warnings.append(f"all GPUs: {w}")
+        record_gpu_warnings(list(range(inp.gpu_count)), result.warnings)
 
     # ASSUMPTION: 50% pump efficiency (same assumption as single cold plate model).
     total_pump_power = total_dp * flow_m3s / 0.5
@@ -278,9 +287,16 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
     hottest_idx = tj_list.index(max_tj)
 
     warnings: list[str] = []
-    if max_tj > 85:
-        warnings.append(f"GPU {hottest_idx} (0-indexed) junction temperature {max_tj:.1f}°C exceeds 85°C design ceiling")
-    warnings.extend(per_gpu_warnings)
+    for warning, gpu_indices in warning_gpu_indices.items():
+        if len(gpu_indices) == inp.gpu_count:
+            scope = "all GPUs"
+        elif len(gpu_indices) == 1:
+            scope = f"GPU {gpu_indices[0]}"
+        elif gpu_indices == list(range(gpu_indices[0], gpu_indices[-1] + 1)):
+            scope = f"GPUs {gpu_indices[0]}–{gpu_indices[-1]} ({len(gpu_indices)}/{inp.gpu_count})"
+        else:
+            scope = f"GPUs {','.join(str(index) for index in gpu_indices)} ({len(gpu_indices)}/{inp.gpu_count})"
+        warnings.append(f"{scope}: {warning}")
 
     return AnalyzeRackOutput(
         topology=inp.topology,
@@ -299,9 +315,9 @@ def analyze_rack(inp: AnalyzeRackInput) -> AnalyzeRackOutput:
 def optimize_flow(inp: OptimizeFlowRateInput, max_iter: int = 40) -> tuple[float, AnalyzeColdplateOutput | None]:
     """Binary search for minimum flow rate meeting the junction temperature target.
 
-    The effective ceiling is (max_junction_temp_c − margin_c). This lets callers
-    bake in a safety margin for R_jc manufacturing variation (+20% adds ~1–2°C)
-    and TIM degradation (doubling R_tim adds ~6–14°C depending on heat load).
+    The effective ceiling is (max_junction_temp_c − margin_c). The margin is a
+    caller-supplied guardband; this helper does not infer a universal margin or
+    model package tolerance and service-life behavior.
 
     Returns (minimum_flow_lpm, analysis_at_minimum_flow). If no flow rate in
     [flow_min_lpm, flow_max_lpm] meets the target, returns (flow_max_lpm, None).

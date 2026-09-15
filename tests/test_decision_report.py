@@ -1,4 +1,4 @@
-"""Tests for the decision_report synthesis module."""
+"""Contract and behavior tests for the schema-v2 decision report."""
 
 from __future__ import annotations
 
@@ -6,336 +6,319 @@ import pytest
 
 from thermal_mcp_server.decision_report import KNOWN_LIMITATIONS, generate_decision_report
 from thermal_mcp_server.mcp_server import generate_decision_report_impl
-from thermal_mcp_server.schemas import DecisionScenario, RiskLevel
+from thermal_mcp_server.physics import analyze
+from thermal_mcp_server.schemas import (
+    AnalyzeColdplateInput,
+    DecisionScenario,
+    DecisionStatus,
+    EvaluationMode,
+)
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+
+def _scenario(**overrides) -> DecisionScenario:
+    values = {
+        "chip_label": "Illustrative 700 W accelerator",
+        "heat_load_w": 700.0,
+        "gpu_count": 1,
+        "target_junction_temp_c": 83.0,
+        "margin_c": 5.0,
+        "coolant": "water",
+        "inlet_temp_c": 25.0,
+    }
+    values.update(overrides)
+    return DecisionScenario(**values)
 
 
-def _h100_scenario(**overrides) -> DecisionScenario:
-    """H100 SXM reference scenario."""
-    defaults = dict(
-        chip_label="H100 SXM",
-        heat_load_w=700.0,
-        gpu_count=1,
-        target_junction_temp_c=83.0,
-        margin_c=5.0,
-        coolant="water",
-        inlet_temp_c=25.0,
+def test_fixed_flow_is_evaluated_unchanged():
+    report = generate_decision_report(_scenario(flow_rate_lpm=8.0))
+    direct = analyze(
+        AnalyzeColdplateInput(
+            heat_load_w=700.0,
+            flow_rate_lpm=8.0,
+            inlet_temp_c=25.0,
+            coolant="water",
+        )
     )
-    defaults.update(overrides)
-    return DecisionScenario(**defaults)
+
+    assert report.status == DecisionStatus.MEETS_TARGET
+    assert report.evaluation_mode == EvaluationMode.FIXED_FLOW
+    assert report.attempted_flow_lpm_per_gpu == 8.0
+    assert report.flow_search is None
+    assert report.evaluated_point is not None
+    assert report.evaluated_point.role == "fixed_input"
+    assert report.evaluated_point.flow_lpm_per_gpu == 8.0
+    assert report.evaluated_point.junction_temp_c == pytest.approx(direct.junction_temp_c)
+    assert report.evaluated_point.margin_to_limit_c == pytest.approx(83.0 - direct.junction_temp_c)
+    assert report.evaluated_point.margin_to_criterion_c == pytest.approx(78.0 - direct.junction_temp_c)
 
 
-# ---------------------------------------------------------------------------
-# Structural / contract tests
-# ---------------------------------------------------------------------------
+def test_fixed_flow_failure_is_scoped_to_that_point():
+    report = generate_decision_report(_scenario(flow_rate_lpm=0.5, target_junction_temp_c=40.0, margin_c=0.0))
+
+    assert report.status == DecisionStatus.FAILS_AT_EVALUATED_FLOW
+    assert report.evaluated_point is not None
+    assert report.evaluated_point.role == "fixed_input"
+    assert report.evaluated_point.meets_thermal_target is False
+    assert any("another flow may work" in warning for warning in report.warnings)
 
 
-def test_report_always_has_blind_spots():
-    """Blind spots must always be populated — never empty."""
-    report = generate_decision_report(_h100_scenario())
-    assert len(report.blind_spots) >= len(KNOWN_LIMITATIONS)
-    for limitation in KNOWN_LIMITATIONS:
-        assert limitation in report.blind_spots
+def test_successful_single_plate_search_reports_model_minimum_without_multiplier():
+    report = generate_decision_report(_scenario())
+
+    assert report.status == DecisionStatus.MEETS_TARGET
+    assert report.evaluation_mode == EvaluationMode.THERMAL_SEARCH
+    assert report.flow_search is not None
+    assert report.flow_search.scope == "single_plate"
+    assert report.flow_search.minimum_feasible_lpm_per_gpu is not None
+    assert report.evaluated_point is not None
+    assert report.evaluated_point.role == "thermal_search_result"
+    assert report.evaluated_point.flow_lpm_per_gpu == pytest.approx(report.flow_search.minimum_feasible_lpm_per_gpu)
+    assert report.evaluated_point.meets_thermal_target is True
+    assert any("not an operating recommendation" in warning for warning in report.warnings)
 
 
-def test_report_blind_spots_cover_key_omissions():
-    """Key omissions (manifold losses, temperature-dependence) must be mentioned."""
-    report = generate_decision_report(_h100_scenario())
+def test_failed_search_has_no_invented_recommendation():
+    report = generate_decision_report(_scenario(heat_load_w=1200.0, target_junction_temp_c=75.0))
+
+    assert report.status == DecisionStatus.NO_FEASIBLE_FLOW_IN_SEARCH_RANGE
+    assert report.flow_search is not None
+    assert report.flow_search.min_lpm_per_gpu == 0.5
+    assert report.flow_search.max_lpm_per_gpu == 60.0
+    assert report.flow_search.minimum_feasible_lpm_per_gpu is None
+    assert report.evaluated_point is not None
+    assert report.evaluated_point.role == "search_bound_diagnostic"
+    assert report.evaluated_point.flow_lpm_per_gpu == 60.0
+    assert report.evaluated_point.meets_thermal_target is False
+    assert all(stress.status == "unavailable" for stress in report.stress_scenarios)
+    assert all("search-bound diagnostic" in (stress.reason or "") for stress in report.stress_scenarios)
+
+
+def test_series_candidate_failure_is_undetermined_not_infeasible():
+    report = generate_decision_report(_scenario(gpu_count=8, topology="series"))
+
+    assert report.status == DecisionStatus.UNDETERMINED
+    assert report.flow_search is not None
+    assert report.flow_search.scope == "single_plate_candidate_for_series"
+    assert report.flow_search.minimum_feasible_lpm_per_gpu is None
+    assert report.evaluated_point is not None
+    assert report.evaluated_point.role == "series_candidate"
+    assert report.evaluated_point.meets_thermal_target is False
+    assert any("no rack-wide search" in warning for warning in report.warnings)
+    assert all(stress.status == "evaluated" for stress in report.stress_scenarios)
+    assert all(stress.reason is None for stress in report.stress_scenarios)
+
+
+def test_passing_series_candidate_does_not_claim_minimum_rack_flow():
+    report = generate_decision_report(_scenario(gpu_count=2, topology="series", target_junction_temp_c=150.0))
+
+    assert report.status == DecisionStatus.MEETS_TARGET
+    assert report.evaluated_point is not None
+    assert report.evaluated_point.role == "series_candidate"
+    assert report.evaluated_point.meets_thermal_target is True
+    assert report.flow_search is not None
+    assert report.flow_search.minimum_feasible_lpm_per_gpu is None
+    assert any("not a minimum rack flow" in warning for warning in report.warnings)
+
+
+def test_unsupported_series_rack_has_no_placeholder_point():
+    report = generate_decision_report(_scenario(gpu_count=256, topology="series", flow_rate_lpm=8.0))
+
+    assert report.status == DecisionStatus.UNDETERMINED
+    assert report.attempted_flow_lpm_per_gpu == 8.0
+    assert report.evaluated_point is None
+    assert report.flow_search is None
+    assert any("downstream inlet" in warning for warning in report.warnings)
+    assert any("No temperature or thermal margin" in warning for warning in report.warnings)
+
+
+def test_parallel_search_uses_per_gpu_flow_and_rack_point():
+    report = generate_decision_report(_scenario(gpu_count=8, topology="parallel"))
+
+    assert report.status == DecisionStatus.MEETS_TARGET
+    assert report.flow_search is not None
+    assert report.flow_search.scope == "parallel_rack"
+    assert report.evaluated_point is not None
+    assert report.evaluated_point.cdu_outlet_temp_c is not None
+    assert report.evaluated_point.meets_thermal_target is True
+
+
+def test_stress_scenarios_are_signed_independent_model_deltas():
+    report = generate_decision_report(_scenario(flow_rate_lpm=8.0))
+    stresses = {stress.name: stress for stress in report.stress_scenarios}
+
+    assert set(stresses) == {
+        "r_jc_minus_variation",
+        "r_jc_plus_variation",
+        "r_tim_multiplier",
+        "heat_load_delta",
+        "supply_temp_delta",
+    }
+    assert all(stress.status == "evaluated" for stress in stresses.values())
+    assert stresses["r_jc_minus_variation"].signed_junction_delta_c == pytest.approx(-5.6)
+    assert stresses["r_jc_plus_variation"].signed_junction_delta_c == pytest.approx(5.6)
+    assert stresses["r_tim_multiplier"].signed_junction_delta_c == pytest.approx(14.0)
+    assert stresses["supply_temp_delta"].signed_junction_delta_c == pytest.approx(1.0)
+
+
+def test_stress_scenarios_are_unavailable_without_a_valid_point():
+    report = generate_decision_report(_scenario(gpu_count=256, topology="series", flow_rate_lpm=8.0))
+
+    assert report.stress_scenarios
+    assert all(stress.status == "unavailable" for stress in report.stress_scenarios)
+    assert all(stress.signed_junction_delta_c is None for stress in report.stress_scenarios)
+    assert all(stress.changed_parameter is not None for stress in report.stress_scenarios)
+    assert all(stress.base_value is not None for stress in report.stress_scenarios)
+    assert all(stress.perturbed_value is not None for stress in report.stress_scenarios)
+    assert all(stress.units is not None for stress in report.stress_scenarios)
+
+
+def test_report_does_not_claim_system_hydraulic_feasibility_or_overall_risk():
+    report = generate_decision_report(_scenario(flow_rate_lpm=8.0))
+
+    assert report.system_hydraulic_feasibility == "not_assessed"
+    assert report.risk_assessment == "not_assessed"
+    assert report.evaluated_point is not None
+    assert report.evaluated_point.pressure_drop_pa is not None
+
+
+def test_report_carries_model_identity_and_validation_boundary():
+    report = generate_decision_report(_scenario(flow_rate_lpm=8.0))
+
+    assert report.report_schema_version == 2
+    assert report.model.validation_state == "unvalidated"
+    notices = " ".join(report.model.applicability_notices).lower()
+    assert "transition" in notices
+    assert "rectangular" in notices
+    assert "measured" in notices
+
+
+def test_report_propagates_selected_point_physics_warnings():
+    report = generate_decision_report(_scenario(flow_rate_lpm=0.5, target_junction_temp_c=150.0, margin_c=0.0))
+
+    assert report.status == DecisionStatus.MEETS_TARGET
+    assert any("very low Reynolds number" in warning for warning in report.warnings)
+    assert any("no measured cold-plate validation" in warning for warning in report.warnings)
+    assert "very low Reynolds number" in report.rendered_memo
+
+
+def test_report_always_carries_material_blind_spots():
+    report = generate_decision_report(_scenario(flow_rate_lpm=8.0))
+
+    assert report.blind_spots == KNOWN_LIMITATIONS
     combined = " ".join(report.blind_spots).lower()
     assert "manifold" in combined
     assert "temperature" in combined or "fluid properties" in combined
-    assert "steady-state" in combined or "transient" in combined
+    assert "transient" in combined
 
 
-def test_report_uncertainty_keys_present():
-    """Uncertainty section must include R_jc and TIM aging contributors."""
-    report = generate_decision_report(_h100_scenario())
-    keys_lower = {k.lower() for k in report.uncertainty_section}
-    assert any("r_jc" in k for k in keys_lower)
-    assert any("tim" in k for k in keys_lower)
+def test_resolved_scenario_includes_complete_geometry():
+    report = generate_decision_report(_scenario(flow_rate_lpm=8.0, geometry={"channel_count": 20}))
+
+    geometry = report.resolved_scenario["geometry"]
+    assert geometry["channel_count"] == 20
+    assert geometry["channel_width_m"] == 1.0e-3
 
 
-def test_report_rendered_memo_non_empty():
-    """rendered_memo must be a non-empty markdown string."""
-    report = generate_decision_report(_h100_scenario())
-    assert len(report.rendered_memo) > 200
-    assert "# Thermal Decision Memo" in report.rendered_memo
-
-
-def test_report_rendered_memo_contains_key_sections():
-    """Rendered memo must contain the required section headers."""
-    report = generate_decision_report(_h100_scenario())
-    memo = report.rendered_memo
-    assert "Recommended Operating Point" in memo
-    assert "Uncertainty" in memo
-    assert "Model Blind Spots" in memo
-
-
-# ---------------------------------------------------------------------------
-# Feasibility and risk level tests
-# ---------------------------------------------------------------------------
-
-
-def test_report_feasible_h100_water():
-    """Standard H100 + water should be feasible; Tj must be below target."""
-    report = generate_decision_report(_h100_scenario())
-    assert report.feasible is True
-    assert report.risk_level in (RiskLevel.LOW, RiskLevel.MEDIUM, RiskLevel.HIGH)
-    assert report.junction_temp_at_recommended_c < 83.0
-    # Margin remaining is measured to actual target (83°C), not effective target
-    assert report.margin_remaining_c == pytest.approx(83.0 - report.junction_temp_at_recommended_c, abs=0.01)
-
-
-def test_report_infeasible_impossible_target():
-    """Target below inlet temperature is infeasible."""
-    report = generate_decision_report(_h100_scenario(target_junction_temp_c=26.0, margin_c=0.0))
-    assert report.feasible is False
-    assert report.risk_level == RiskLevel.HIGH
-    assert any("INFEASIBLE" in w for w in report.warnings)
-
-
-def test_report_infeasible_target_too_tight_with_margin():
-    """Very tight target + large margin combo forces infeasibility."""
-    # Effective target = 30 - 20 = 10°C, which is below inlet (25°C)
-    report = generate_decision_report(_h100_scenario(target_junction_temp_c=30.0, margin_c=20.0))
-    # margin_c must be < target, so 20 < 30 is valid, but effective target < inlet
-    assert report.feasible is False
-
-
-def test_report_risk_low_with_large_margin_budget():
-    """Generous target temp with standard conditions → LOW or MEDIUM risk (not HIGH)."""
-    report = generate_decision_report(_h100_scenario(target_junction_temp_c=95.0, margin_c=5.0))
-    assert report.feasible is True
-    assert report.risk_level != RiskLevel.HIGH
-    # margin_remaining is measured to actual target (95°C)
-    assert report.margin_remaining_c == pytest.approx(95.0 - report.junction_temp_at_recommended_c, abs=0.01)
-
-
-# ---------------------------------------------------------------------------
-# Determinism test
-# ---------------------------------------------------------------------------
-
-
-def test_report_deterministic():
-    """Same scenario twice must produce identical numerical output."""
-    scenario = _h100_scenario()
-    r1 = generate_decision_report(scenario)
-    r2 = generate_decision_report(scenario)
-    assert r1.junction_temp_at_recommended_c == r2.junction_temp_at_recommended_c
-    assert r1.recommended_flow.min_lpm == r2.recommended_flow.min_lpm
-    assert r1.risk_level == r2.risk_level
-    assert r1.margin_remaining_c == r2.margin_remaining_c
-
-
-# ---------------------------------------------------------------------------
-# Margin propagation test
-# ---------------------------------------------------------------------------
-
-
-def test_report_margin_propagates():
-    """Larger margin_c must require higher minimum flow (more conservative)."""
-    r_low_margin = generate_decision_report(_h100_scenario(margin_c=0.0))
-    r_high_margin = generate_decision_report(_h100_scenario(margin_c=10.0))
-    if r_low_margin.feasible and r_high_margin.feasible:
-        assert r_high_margin.recommended_flow.min_lpm >= r_low_margin.recommended_flow.min_lpm
-
-
-def test_report_zero_margin_equals_no_margin():
-    """margin_c=0 should give same result as omitting margin (default 5° is different)."""
-    r0 = generate_decision_report(_h100_scenario(margin_c=0.0))
-    r0b = generate_decision_report(_h100_scenario(margin_c=0.0))
-    assert r0.recommended_flow.min_lpm == r0b.recommended_flow.min_lpm
-
-
-# ---------------------------------------------------------------------------
-# Fixed-flow mode
-# ---------------------------------------------------------------------------
-
-
-def test_report_fixed_flow_mode():
-    """Providing flow_rate_lpm bypasses optimization."""
-    report = generate_decision_report(_h100_scenario(flow_rate_lpm=8.0))
-    assert report.feasible is True
-    # Recommended flow should be 15% above the provided value
-    assert abs(report.recommended_flow.recommended_lpm - 8.0 * 1.15) < 0.01
-
-
-def test_report_fixed_flow_infeasible():
-    """Very low fixed flow with tight target → infeasible."""
-    report = generate_decision_report(_h100_scenario(flow_rate_lpm=0.5, target_junction_temp_c=40.0, margin_c=0.0))
-    assert report.feasible is False
-
-
-# ---------------------------------------------------------------------------
-# Multi-GPU topology tests
-# ---------------------------------------------------------------------------
-
-
-def test_report_rack_topology_populated():
-    """Multi-GPU scenario must include topology recommendation text."""
-    report = generate_decision_report(_h100_scenario(gpu_count=8, topology="parallel"))
-    assert len(report.topology_recommendation) > 20
-    assert "parallel" in report.topology_recommendation.lower()
-
-
-def test_report_single_gpu_topology_not_applicable():
-    """Single GPU scenario should note topology is not applicable."""
-    report = generate_decision_report(_h100_scenario(gpu_count=1))
-    assert "not applicable" in report.topology_recommendation.lower()
-
-
-def test_report_series_topology_rationale():
-    """Series topology rationale must mention series and its characteristics."""
-    report = generate_decision_report(_h100_scenario(gpu_count=4, topology="series"))
-    rationale = report.topology_recommendation.lower()
-    assert "series" in rationale
-
-
-# ---------------------------------------------------------------------------
-# Rack-aware feasibility (PR28 review fix #1)
-#
-# Single-coldplate optimization can mislabel multi-GPU series scenarios as
-# feasible because it ignores temperature stacking. These tests pin the
-# corrected behaviour: the rack-level max Tj is the source of truth for
-# feasibility, risk, and margin once gpu_count > 1.
-# ---------------------------------------------------------------------------
-
-
-def test_report_series_rack_uses_rack_max_tj():
-    """8-GPU series at the same per-GPU flow gives a higher Tj than 1-GPU.
-    The rack-aware fix must surface that — Tj_at_recommended must reflect
-    the hottest GPU in the chain, not the first.
-    """
-    single = generate_decision_report(_h100_scenario(gpu_count=1))
-    series_8 = generate_decision_report(_h100_scenario(gpu_count=8, topology="series"))
-    # 8-GPU series must be at least as hot as 1-GPU at the same per-GPU flow.
-    assert series_8.junction_temp_at_recommended_c > single.junction_temp_at_recommended_c
-    # And meaningfully so — series stacking should produce several °C of rise.
-    assert series_8.junction_temp_at_recommended_c - single.junction_temp_at_recommended_c > 3.0
-
-
-def test_report_parallel_rack_matches_single_gpu_tj():
-    """Parallel topology gives every GPU the same inlet, so 8-GPU parallel Tj
-    at per-GPU flow F should match 1-GPU at flow F.
-    """
-    single = generate_decision_report(_h100_scenario(gpu_count=1))
-    parallel_8 = generate_decision_report(_h100_scenario(gpu_count=8, topology="parallel"))
-    assert abs(parallel_8.junction_temp_at_recommended_c - single.junction_temp_at_recommended_c) < 0.5
-
-
-def test_report_series_can_flip_feasibility_to_infeasible():
-    """A scenario that is feasible as a single GPU can become infeasible as
-    an 8-GPU series rack because of coolant temperature stacking. The
-    rack-aware fix must catch this.
-    """
-    # Choose a target that single-coldplate just barely meets but 8-GPU series
-    # cannot. H100 700W water 25°C inlet, target 80°C, margin 0.
-    single = generate_decision_report(_h100_scenario(target_junction_temp_c=80.0, margin_c=0.0, gpu_count=1))
-    series_8 = generate_decision_report(_h100_scenario(target_junction_temp_c=80.0, margin_c=0.0, gpu_count=8, topology="series"))
-    assert single.feasible is True
-    assert series_8.feasible is False
-
-
-def test_report_extreme_series_does_not_crash():
-    """A series rack so deep that downstream coolant exceeds the 80°C model
-    bound must NOT raise — it must be reported as infeasible with a clear
-    warning. This is the schema-overflow path inside analyze_rack.
-    """
+def test_leaf_provenance_distinguishes_supplied_and_defaulted_values():
     report = generate_decision_report(
-        _h100_scenario(
-            heat_load_w=1500.0,  # high TDP per GPU
-            gpu_count=64,  # deep chain
-            topology="series",
-            inlet_temp_c=60.0,  # already hot supply
-            target_junction_temp_c=83.0,
-            margin_c=0.0,
+        DecisionScenario(
+            flow_rate_lpm=8.0,
+            heat_load_w=700.0,
+            geometry={"channel_count": 40},
+            input_source_notes={"heat_load_w": "illustrative public scenario"},
         )
     )
-    assert report.feasible is False
-    # Warning must explain the overflow, not just say "infeasible"
-    combined_warnings = " ".join(report.warnings).lower()
-    assert "infeasible" in combined_warnings or "model bound" in combined_warnings or "80" in combined_warnings
+
+    assert report.input_provenance["heat_load_w"] == {
+        "origin": "supplied",
+        "source_note": "illustrative public scenario",
+    }
+    assert report.input_provenance["inlet_temp_c"]["origin"] == "defaulted"
+    assert report.input_provenance["geometry.channel_count"]["origin"] == "supplied"
+    assert report.input_provenance["geometry.channel_width_m"]["origin"] == "defaulted"
 
 
-# ---------------------------------------------------------------------------
-# Flow band structure
-# ---------------------------------------------------------------------------
-
-
-def test_report_flow_band_ordering():
-    """Flow band must satisfy min <= recommended <= max."""
-    report = generate_decision_report(_h100_scenario())
-    fb = report.recommended_flow
-    assert fb.min_lpm <= fb.recommended_lpm
-    assert fb.recommended_lpm <= fb.max_lpm
-
-
-def test_report_flow_band_basis_non_empty():
-    """Flow band basis string must be populated."""
-    report = generate_decision_report(_h100_scenario())
-    assert len(report.recommended_flow.basis) > 5
-
-
-# ---------------------------------------------------------------------------
-# MCP layer (generate_decision_report_impl) contract tests
-# ---------------------------------------------------------------------------
-
-
-def test_mcp_impl_returns_dict():
-    """MCP impl must return a dict (JSON-serialisable)."""
-    result = generate_decision_report_impl(chip_label="H100 SXM", heat_load_w=700.0)
-    assert isinstance(result, dict)
-    assert "feasible" in result
-    assert "risk_level" in result
-    assert "rendered_memo" in result
-
-
-def test_mcp_impl_invalid_coolant():
-    """Invalid coolant must return error dict, not raise."""
-    result = generate_decision_report_impl(heat_load_w=700.0, coolant="liquid_nitrogen")
-    assert "error" in result
-
-
-def test_mcp_impl_margin_exceeds_target():
-    """margin_c >= target_junction_temp_c must return error dict."""
-    result = generate_decision_report_impl(heat_load_w=700.0, target_junction_temp_c=50.0, margin_c=60.0)
-    assert "error" in result
-
-
-def test_mcp_impl_geometry_passthrough():
-    """Custom geometry must change analysis output."""
-    r_default = generate_decision_report_impl(heat_load_w=700.0)
-    r_narrow = generate_decision_report_impl(
-        heat_load_w=700.0,
-        geometry={"channel_count": 80, "channel_width_m": 0.5e-3, "channel_height_m": 0.5e-3},
+def test_stress_provenance_tracks_supplied_leaf_and_source_note():
+    report = generate_decision_report(
+        DecisionScenario(
+            flow_rate_lpm=8.0,
+            stress_scenarios={"heat_load_delta_w": 25.0},
+            input_source_notes={"stress_scenarios.heat_load_delta_w": "owner stress case"},
+        )
     )
-    assert isinstance(r_narrow, dict)
-    assert "feasible" in r_narrow
-    # Narrower channels → different Tj
-    assert r_default["junction_temp_at_recommended_c"] != r_narrow["junction_temp_at_recommended_c"]
+
+    assert report.input_provenance["stress_scenarios.heat_load_delta_w"] == {
+        "origin": "supplied",
+        "source_note": "owner stress case",
+    }
+    assert report.input_provenance["stress_scenarios.r_tim_multiplier"]["origin"] == "defaulted"
 
 
-def test_mcp_impl_extreme_series_returns_error_dict_not_crash():
-    """PR28 review fix #2: schema-valid scenarios that trigger downstream
-    ValidationError during synthesis (e.g. extreme series stacking that
-    overflows the 80°C model bound) must return an {"error": ...} dict,
-    matching the contract of analyze_rack_impl. The MCP tool must not raise.
-    """
-    # The same configuration that triggers the schema-overflow path inside
-    # analyze_rack — but routed through the MCP wrapper.
-    result = generate_decision_report_impl(
-        heat_load_w=1500.0,
-        gpu_count=64,
-        topology="series",
-        inlet_temp_c=60.0,
-        target_junction_temp_c=83.0,
-        margin_c=0.0,
-    )
-    assert isinstance(result, dict)
-    # Either we caught it cleanly inside synthesis (returned a feasible=False
-    # report) or the MCP wrapper caught it as an error dict. Both are
-    # acceptable outcomes; what is NOT acceptable is an unhandled exception.
-    assert ("feasible" in result and result["feasible"] is False) or "error" in result
+def test_v2_dump_omits_removed_authority_bearing_fields():
+    dumped = generate_decision_report(_scenario(flow_rate_lpm=8.0)).model_dump()
+
+    for removed in (
+        "feasible",
+        "recommended_flow",
+        "recommended_supply_temp_c",
+        "junction_temp_at_recommended_c",
+        "margin_remaining_c",
+        "risk_level",
+        "uncertainty_section",
+        "topology_recommendation",
+    ):
+        assert removed not in dumped
+
+
+def test_rendered_memo_matches_structured_status_and_boundaries():
+    report = generate_decision_report(_scenario(flow_rate_lpm=8.0))
+    memo = report.rendered_memo
+
+    assert "# Thermal Decision Memo" in memo
+    assert "`meets_target`" in memo
+    assert "Evaluated Point (fixed_input)" in memo
+    assert "not assessed" in memo
+    assert "Model Blind Spots" in memo
+    assert "Recommended Operating Point" not in memo
+
+
+def test_rendered_memo_uses_engineering_display_precision():
+    report = generate_decision_report(_scenario())
+    memo = report.rendered_memo
+
+    assert "**Flow:** 5.499 LPM/GPU" in memo
+    assert "**Junction temperature:** 78.00°C" in memo
+    assert "**Margin to criterion:** 0.00°C" in memo
+    assert "structured fields retain calculation precision" in memo
+    assert "5.499036" not in memo
+
+
+def test_report_is_deterministic():
+    scenario = _scenario(flow_rate_lpm=8.0)
+
+    assert generate_decision_report(scenario).model_dump() == generate_decision_report(scenario).model_dump()
+
+
+def test_larger_guardband_requires_at_least_as_much_searched_flow():
+    low = generate_decision_report(_scenario(margin_c=0.0))
+    high = generate_decision_report(_scenario(margin_c=10.0))
+
+    assert low.flow_search is not None
+    assert high.flow_search is not None
+    assert low.flow_search.minimum_feasible_lpm_per_gpu is not None
+    assert high.flow_search.minimum_feasible_lpm_per_gpu is not None
+    assert high.flow_search.minimum_feasible_lpm_per_gpu >= low.flow_search.minimum_feasible_lpm_per_gpu
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"coolant": "liquid_nitrogen"},
+        {"target_junction_temp_c": 50.0, "margin_c": 60.0},
+        {"stress_scenarios": {"service_life_years": 3}},
+    ],
+)
+def test_mcp_impl_returns_error_envelope_for_invalid_report_inputs(kwargs):
+    result = generate_decision_report_impl(**kwargs)
+
+    assert "error" in result

@@ -1,4 +1,4 @@
-"""Canonical benchmark decision memos for GPU liquid cooling trade studies.
+"""Reference thermal screening reports for GPU liquid cooling trade studies.
 
 Three named scenarios that demonstrate the decision_report synthesis layer:
 
@@ -10,11 +10,17 @@ Each scenario prints a rendered markdown memo. Run directly:
 
     python examples/decision_memo_examples.py
 
+For the compact Milestone 1 owner-review cases:
+
+    python examples/decision_memo_examples.py --review
+
 These examples use engineering-estimate inputs where vendor data is not
 publicly available. All vendor-sourced and estimated values are labeled.
 """
 
 from __future__ import annotations
+
+import argparse
 
 from thermal_mcp_server.decision_report import generate_decision_report
 from thermal_mcp_server.schemas import DecisionScenario
@@ -106,7 +112,7 @@ def scenario_b200_proxy() -> None:
 
 # ---------------------------------------------------------------------------
 # Scenario 3: H100 coolant trade study — water vs glycol50, single GPU
-# Same chip and conditions; compare recommended flow, Tj, risk level.
+# Same chip and conditions; compare conditional thermal search results.
 # ---------------------------------------------------------------------------
 
 
@@ -129,23 +135,50 @@ def scenario_h100_coolant_trade_study() -> None:
     # Summary comparison table
     print("## Side-by-Side Summary")
     print()
-    header = f"{'Coolant':<12} {'Feasible':<10} {'Risk':<8} {'Min LPM':<10} {'Rec LPM':<10} {'Tj rec (°C)':<14} {'Margin (°C)'}"
+    header = f"{'Coolant':<12} {'Status':<35} {'Evaluated LPM':<16} {'Tj (°C)':<12} {'Guarded margin (°C)'}"
     print(header)
     print("-" * len(header))
     for coolant, report in results.items():
-        fb = report.recommended_flow
-        print(
-            f"{coolant:<12} {str(report.feasible):<10} {report.risk_level.value:<8} "
-            f"{fb.min_lpm:<10.2f} {fb.recommended_lpm:<10.2f} "
-            f"{report.junction_temp_at_recommended_c:<14.1f} {report.margin_remaining_c:.1f}"
-        )
+        point = report.evaluated_point
+        if point is None:
+            print(f"{coolant:<12} {report.status.value:<35} unavailable")
+        else:
+            print(f"{coolant:<12} {report.status.value:<35} {point.flow_lpm_per_gpu:<16.3f} {point.junction_temp_c:<12.1f} {point.margin_to_criterion_c:.1f}")
+    print("System hydraulic feasibility and overall risk are not assessed.")
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
+
+def review_cases() -> None:
+    """Show the four previously misleading outcomes without full memo output."""
+    cases = {
+        "Fixed 8 LPM": DecisionScenario(flow_rate_lpm=8.0),
+        "Failed thermal search": DecisionScenario(heat_load_w=1200.0, target_junction_temp_c=75.0),
+        "Series candidate": DecisionScenario(gpu_count=8, topology="series"),
+        "Unavailable rack": DecisionScenario(gpu_count=256, topology="series", flow_rate_lpm=8.0),
+    }
+    print("Milestone 1: conditional thermal screening, assumed component inputs")
+    print(f"{'Case':<24} {'Status':<35} {'Flow LPM/GPU':<15} {'Tj C':<10} {'Guarded margin C'}")
+    for label, scenario in cases.items():
+        report = generate_decision_report(scenario)
+        point = report.evaluated_point
+        if point is None:
+            print(f"{label:<24} {report.status.value:<35} {'unavailable':<15} {'unavailable':<10} unavailable")
+        else:
+            print(f"{label:<24} {report.status.value:<35} {point.flow_lpm_per_gpu:<15.3f} {point.junction_temp_c:<10.2f} {point.margin_to_criterion_c:.2f}")
+    print("Failed-search and series-candidate points are diagnostics, not recommendations.")
+    print("System hydraulic feasibility and overall risk: not assessed. Hardware accuracy: unvalidated.")
+
+
 if __name__ == "__main__":
-    scenario_h100_series_vs_parallel()
-    scenario_b200_proxy()
-    scenario_h100_coolant_trade_study()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--review", action="store_true", help="Print the compact Milestone 1 review cases")
+    if parser.parse_args().review:
+        review_cases()
+    else:
+        scenario_h100_series_vs_parallel()
+        scenario_b200_proxy()
+        scenario_h100_coolant_trade_study()
