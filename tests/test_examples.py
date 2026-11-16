@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -67,3 +69,15 @@ def test_compact_review_cases_run():
     assert "undetermined" in lines["Series candidate"]
     assert "undetermined" in lines["Unavailable rack"]
     assert "unavailable" in lines["Unavailable rack"]
+
+
+def test_make_figures_runs_and_is_deterministic(tmp_path: Path):
+    # matplotlib comes from the `demo` extra, which the CI test job does not install.
+    pytest.importorskip("matplotlib")
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    assert "straight_fin_correlations.png" in _run_example("make_figures.py", "--out", str(first))
+    _run_example("make_figures.py", "--out", str(second))
+    png = (first / "straight_fin_correlations.png").read_bytes()
+    assert png.startswith(b"\x89PNG")
+    assert png == (second / "straight_fin_correlations.png").read_bytes()
