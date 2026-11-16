@@ -310,3 +310,110 @@ def test_report_mcp_transport_preserves_omission_and_null_results():
 def test_report_mcp_rejects_unknown_stress_parameters():
     result = mcp_server.generate_decision_report_impl(stress_scenarios={"service_life_years": 3})
     assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# Straight-fin geometry fields through the MCP layer
+# ---------------------------------------------------------------------------
+
+_FIN_GEOMETRY = {
+    "channel_count": 76,
+    "channel_width_m": 0.39e-3,
+    "channel_height_m": 3.75e-3,
+    "channel_length_m": 0.06,
+    "contact_area_m2": 76 * 0.78e-3 * 0.06,
+    "channel_model": "straight_fin",
+    "fin_thickness_m": 0.39e-3,
+}
+_INVALID_FIN_GEOMETRIES = [
+    {"channel_model": "straight_fin"},
+    {"fin_thickness_m": 0.39e-3},
+    {"channel_model": "full_wetted_area", "fin_thickness_m": 0.39e-3},
+]
+
+
+def _fin_python_result(heat_load_w: float = 1000.0, flow_rate_lpm: float = 1.5, coolant: str = "water"):
+    from thermal_mcp_server.physics import analyze
+    from thermal_mcp_server.schemas import AnalyzeColdplateInput, Geometry
+
+    return analyze(AnalyzeColdplateInput(heat_load_w=heat_load_w, flow_rate_lpm=flow_rate_lpm, coolant=coolant, geometry=Geometry(**_FIN_GEOMETRY)))
+
+
+def test_analyze_coldplate_straight_fin_passthrough():
+    out = mcp_server.analyze_coldplate_impl(heat_load_w=1000, flow_rate_lpm=1.5, geometry=_FIN_GEOMETRY)
+    assert out == _fin_python_result().model_dump()
+    assert out["fin_efficiency"] is not None and 0 < out["fin_efficiency"] <= 1
+    default_out = mcp_server.analyze_coldplate_impl(heat_load_w=700, flow_rate_lpm=8)
+    assert default_out["fin_efficiency"] is None
+
+
+def test_compare_coolants_straight_fin_passthrough():
+    out = mcp_server.compare_coolants_impl(heat_load_w=1000, flow_rate_lpm=1.5, geometry=_FIN_GEOMETRY)
+    assert out["inputs"]["geometry"]["channel_model"] == "straight_fin"
+    assert out["inputs"]["geometry"]["fin_thickness_m"] == 0.39e-3
+    for coolant in ("water", "glycol50"):
+        assert out["results"][coolant] == _fin_python_result(coolant=coolant).model_dump()
+
+
+def test_optimize_flow_rate_straight_fin_passthrough():
+    out = mcp_server.optimize_flow_rate_impl(heat_load_w=1000, max_junction_temp_c=95, geometry=_FIN_GEOMETRY)
+    assert out["met_target"] is True
+    analysis = out["analysis_at_minimum_flow"]
+    assert analysis["fin_efficiency"] is not None
+    # optimize_flow returns the upper bisection bound, which is the analyzed flow.
+    assert analysis == _fin_python_result(flow_rate_lpm=out["minimum_flow_rate_lpm"]).model_dump()
+
+
+def test_analyze_rack_straight_fin_passthrough():
+    out = mcp_server.analyze_rack_impl(gpu_count=4, topology="parallel", heat_load_per_gpu_w=1000, total_flow_lpm=6.0, geometry=_FIN_GEOMETRY)
+    assert out["max_junction_temp_c"] == _fin_python_result().junction_temp_c
+    assert any("straight-fin model" in warning for warning in out["warnings"])
+
+
+def test_decision_report_straight_fin_passthrough():
+    out = mcp_server.generate_decision_report_impl(heat_load_w=1000.0, flow_rate_lpm=1.5, target_junction_temp_c=110.0, geometry=_FIN_GEOMETRY)
+    assert out["evaluated_point"]["junction_temp_c"] == _fin_python_result().junction_temp_c
+    assert out["resolved_scenario"]["geometry"]["channel_model"] == "straight_fin"
+    assert out["resolved_scenario"]["geometry"]["fin_thickness_m"] == 0.39e-3
+    assert any("straight-fin model" in warning for warning in out["warnings"])
+
+
+def test_straight_fin_validation_errors_surface_as_tool_errors():
+    for geometry in _INVALID_FIN_GEOMETRIES:
+        assert "error" in mcp_server.analyze_coldplate_impl(heat_load_w=700, flow_rate_lpm=8, geometry=geometry)
+        assert "error" in mcp_server.compare_coolants_impl(heat_load_w=700, flow_rate_lpm=8, geometry=geometry)
+        assert "error" in mcp_server.optimize_flow_rate_impl(heat_load_w=700, max_junction_temp_c=85, geometry=geometry)
+        assert "error" in mcp_server.analyze_rack_impl(gpu_count=2, topology="series", heat_load_per_gpu_w=700, total_flow_lpm=8, geometry=geometry)
+        assert "error" in mcp_server.generate_decision_report_impl(flow_rate_lpm=8.0, geometry=geometry)
+
+
+def test_report_provenance_tracks_channel_model_and_fin_thickness():
+    """Python and MCP (impl and transport) agree on supplied/defaulted origin for the new fields."""
+    import asyncio
+
+    from fastmcp import Client
+
+    from thermal_mcp_server.decision_report import generate_decision_report
+    from thermal_mcp_server.schemas import DecisionScenario
+
+    fin_kwargs = {"heat_load_w": 1000.0, "flow_rate_lpm": 1.5, "target_junction_temp_c": 110.0, "geometry": _FIN_GEOMETRY}
+    cases = {
+        "omitted_geometry": ({"flow_rate_lpm": 8.0}, "defaulted", "defaulted"),
+        "geometry_without_new_fields": ({"flow_rate_lpm": 8.0, "geometry": {"channel_count": 40}}, "defaulted", "defaulted"),
+        "explicit_full_wetted_area": ({"flow_rate_lpm": 8.0, "geometry": {"channel_model": "full_wetted_area"}}, "supplied", "defaulted"),
+        "straight_fin": (fin_kwargs, "supplied", "supplied"),
+    }
+
+    async def via_transport(kwargs: dict) -> dict:
+        async with Client(mcp_server.mcp) as client:
+            return (await client.call_tool("generate_decision_report", kwargs)).data
+
+    for name, (kwargs, model_origin, thickness_origin) in cases.items():
+        direct = generate_decision_report(DecisionScenario(**kwargs)).model_dump(mode="json")
+        wrapped = mcp_server.generate_decision_report_impl(**kwargs)
+        transported = asyncio.run(via_transport(kwargs))
+        assert wrapped == direct, name
+        for report in (direct, wrapped, transported):
+            provenance = report["input_provenance"]
+            assert provenance["geometry.channel_model"]["origin"] == model_origin, name
+            assert provenance["geometry.fin_thickness_m"]["origin"] == thickness_origin, name

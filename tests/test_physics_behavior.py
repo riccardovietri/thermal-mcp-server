@@ -600,3 +600,351 @@ def test_optimize_margin_c_infeasible():
     inp = OptimizeFlowRateInput(heat_load_w=700, max_junction_temp_c=70, margin_c=60.0, coolant="water")
     flow, result = optimize_flow(inp)
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Straight-fin channel model (docs/physics.md Section I)
+# ---------------------------------------------------------------------------
+
+_FIN_WARNING = (
+    "straight-fin model assumes fully developed laminar flow with an adiabatic cover; "
+    "entrance effects, fin-tip heat transfer and flow maldistribution are not modeled"
+)
+_FIN_RANGE_WARNING = "straight-fin correlations were checked for laminar flow only; this operating point is outside that range"
+
+
+def _screen_1d_geometry(**overrides) -> Geometry:
+    """The 0.39 / 0.39 / 3.75 mm design used by thermal-design-loop screen_1d."""
+    fields = dict(
+        channel_count=76,
+        channel_width_m=0.39e-3,
+        channel_height_m=3.75e-3,
+        channel_length_m=0.06,
+        base_thickness_m=2.0e-3,
+        contact_area_m2=76 * 0.78e-3 * 0.06,
+        copper_k_w_mk=385.0,
+        channel_model="straight_fin",
+        fin_thickness_m=0.39e-3,
+    )
+    fields.update(overrides)
+    return Geometry(**fields)
+
+
+def _darcy_f_re(result, inp: AnalyzeColdplateInput) -> float:
+    """Recover Darcy f·Re from the reported pressure drop: f = ΔP / ((L/Dh)·ρv²/2)."""
+    g = inp.geometry
+    rho = {"water": 997.0, "glycol50": 1060.0}[inp.coolant]
+    dh = 2 * g.channel_width_m * g.channel_height_m / (g.channel_width_m + g.channel_height_m)
+    v = inp.flow_rate_lpm / 60000.0 / (g.channel_count * g.channel_width_m * g.channel_height_m)
+    f = result.pressure_drop_pa / ((g.channel_length_m / dh) * rho * v**2 / 2)
+    return f * result.reynolds
+
+
+def _fin_input_at_re(target_re: float, geometry: Geometry) -> AnalyzeColdplateInput:
+    """Water input whose Reynolds number equals target_re for the given geometry."""
+    dh = 2 * geometry.channel_width_m * geometry.channel_height_m / (geometry.channel_width_m + geometry.channel_height_m)
+    area = geometry.channel_count * geometry.channel_width_m * geometry.channel_height_m
+    flow_lpm = target_re * 0.00089 / (997.0 * dh) * area * 60000.0
+    return AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=flow_lpm, coolant="water", geometry=geometry)
+
+
+@pytest.mark.parametrize(
+    ("alpha", "f_re_fanning", "f_re_darcy", "nu_h1"),
+    [
+        # Shah & London (1978) tabulated fully developed values for rectangular ducts.
+        (1.0, 14.227, 56.908, 3.608),
+        (0.5, 15.548, 62.192, 4.123),
+        (0.25, 18.233, 72.932, 5.331),
+        (0.125, 20.585, 82.340, 6.490),
+    ],
+)
+def test_straight_fin_correlations_match_shah_london_table(alpha: float, f_re_fanning: float, f_re_darcy: float, nu_h1: float):
+    """G1: the polynomials reproduce the tabulated values within 0.5% relative."""
+    geometry = Geometry(
+        channel_count=40,
+        channel_width_m=1.0e-3 * alpha,
+        channel_height_m=1.0e-3,
+        channel_model="straight_fin",
+        fin_thickness_m=0.5e-3,
+    )
+    inp = AnalyzeColdplateInput(flow_rate_lpm=0.5, coolant="water", geometry=geometry)
+    result = analyze(inp)
+
+    assert result.regime == "laminar"
+    assert result.nusselt == pytest.approx(nu_h1, rel=5e-3)
+    f_re = _darcy_f_re(result, inp)
+    assert f_re == pytest.approx(f_re_darcy, rel=5e-3)
+    assert f_re / 4 == pytest.approx(f_re_fanning, rel=5e-3)
+
+
+@pytest.mark.parametrize(
+    ("coolant", "expected"),
+    [
+        (
+            "water",
+            dict(
+                reynolds=178.016895,
+                nusselt=6.738931,
+                fin_efficiency=0.749545,
+                pressure_drop_pa=1014.389176,
+                convection=0.00637425442,
+                base_conduction=0.00146052778,
+                coolant_rise_c=9.598173,
+                junction_temp_c=97.633868,
+            ),
+        ),
+        (
+            "glycol50",
+            dict(
+                reynolds=35.093016,
+                nusselt=6.738931,
+                fin_efficiency=0.814606,
+                pressure_drop_pa=5470.862974,
+                convection=0.00884355568,
+                base_conduction=0.00146052778,
+                coolant_rise_c=11.098779,
+                junction_temp_c=100.853473,
+            ),
+        ),
+    ],
+)
+def test_straight_fin_reproduces_screen_1d(coolant: str, expected: dict[str, float]):
+    """G2: reproduce thermal-design-loop analyze_1d (commit 189f017) at this repo's
+    coolant constants, 1000 W, 1.5 LPM, 25 °C inlet, default R_jc and R_tim."""
+    result = analyze(AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=1.5, coolant=coolant, geometry=_screen_1d_geometry()))
+
+    assert result.regime == "laminar"
+    assert result.reynolds == pytest.approx(expected["reynolds"], rel=1e-6)
+    assert result.nusselt == pytest.approx(expected["nusselt"], rel=1e-6)
+    assert result.fin_efficiency == pytest.approx(expected["fin_efficiency"], rel=1e-6)
+    assert result.pressure_drop_pa == pytest.approx(expected["pressure_drop_pa"], rel=1e-6)
+    assert result.resistances_k_per_w["convection"] == pytest.approx(expected["convection"], rel=1e-6)
+    assert result.resistances_k_per_w["base_conduction"] == pytest.approx(expected["base_conduction"], rel=1e-6)
+    assert result.coolant_rise_c == pytest.approx(expected["coolant_rise_c"], rel=1e-6)
+    assert result.junction_temp_c == pytest.approx(expected["junction_temp_c"], rel=1e-6)
+
+
+def test_hand_calc_validation_straight_fin_800w_water():
+    """G3: independent hand calculation for the straight-fin path.
+
+    Case: 800 W, water, 2.0 LPM, 25 °C inlet, R_jc = 0.04 K/W, R_tim = 0.02 K/W.
+    Geometry: N = 50 channels, w = 0.6 mm, H = 1.5 mm, fin t = 0.4 mm, L = 50 mm,
+    base 2 mm, k = 385 W/m·K, contact area = N × (w + t) × L = 50 × 1.0e-3 × 0.05 = 2.5e-3 m².
+    Water: rho = 997, cp = 4180, k = 0.60, mu = 0.00089.
+
+    Hand calculation (independent of model code):
+      alpha  = min(w, H) / max(w, H) = 0.6 / 1.5 = 0.4
+      Dh     = 2 × 0.6e-3 × 1.5e-3 / (0.6e-3 + 1.5e-3) = 8.57142857e-4 m
+      Vdot   = 2.0 / 60000 = 3.33333333e-5 m³/s
+      A_flow = 50 × 0.6e-3 × 1.5e-3 = 4.5e-5 m²
+      v      = 3.33333333e-5 / 4.5e-5 = 0.740740741 m/s
+      Re     = 997 × 0.740740741 × 8.57142857e-4 / 0.00089 = 711.253790  (laminar, > 500)
+      Nu     = 8.235 × (1 − 2.0421·0.4 + 3.0853·0.16 − 2.4765·0.064 + 1.0578·0.0256 − 0.1861·0.01024)
+             = 8.235 × 0.543486016 = 4.47560734
+      f·Re   = 96 × (1 − 1.3553·0.4 + 1.9467·0.16 − 1.7012·0.064 + 0.9564·0.0256 − 0.2537·0.01024)
+             = 96 × 0.682361152 = 65.5066706  (Darcy)
+      h      = 4.47560734 × 0.60 / 8.57142857e-4 = 3132.92514 W/m²·K
+      m      = sqrt(2 × 3132.92514 / (385 × 0.4e-3)) = 201.711030 1/m
+      mH     = 201.711030 × 1.5e-3 = 0.302566544
+      eta    = tanh(0.302566544) / 0.302566544 = 0.293659592 / 0.302566544 = 0.970562006
+      A_eff  = 50 × 0.05 × (0.6e-3 + 2 × 0.970562006 × 1.5e-3) = 8.77921504e-3 m²
+      R_conv = 1 / (3132.92514 × 8.77921504e-3) = 0.0363575237 K/W
+      R_base = 2.0e-3 / (385 × 2.5e-3) = 0.00207792208 K/W
+      R_tot  = 0.04 + 0.02 + 0.00207792208 + 0.0363575237 = 0.0984354457 K/W
+      m_dot  = 3.33333333e-5 × 997 = 0.0332333333 kg/s
+      rise   = 800 / (0.0332333333 × 4180) = 5.75890350 °C
+      Tj     = 25 + 0.5 × 5.75890350 + 800 × 0.0984354457 = 106.627808 °C
+      f      = 65.5066706 / 711.253790 = 0.0921002763
+      ΔP     = 0.0921002763 × (0.05 / 8.57142857e-4) × 997 × 0.740740741² / 2 = 1469.51950 Pa
+      P_pump = 1469.51950 × 3.33333333e-5 / 0.5 = 0.0979679665 W
+    """
+    geometry = Geometry(
+        channel_count=50,
+        channel_width_m=0.6e-3,
+        channel_height_m=1.5e-3,
+        channel_length_m=0.05,
+        base_thickness_m=2.0e-3,
+        contact_area_m2=2.5e-3,
+        copper_k_w_mk=385.0,
+        channel_model="straight_fin",
+        fin_thickness_m=0.4e-3,
+    )
+    result = analyze(
+        AnalyzeColdplateInput(
+            heat_load_w=800.0,
+            flow_rate_lpm=2.0,
+            inlet_temp_c=25.0,
+            coolant="water",
+            r_jc_k_per_w=0.04,
+            r_tim_k_per_w=0.02,
+            geometry=geometry,
+        )
+    )
+
+    assert result.regime == "laminar"
+    assert result.reynolds == pytest.approx(711.253790, rel=1e-6)
+    assert abs(result.reynolds - 711.253790) < 5
+    assert result.nusselt == pytest.approx(4.47560734, rel=1e-6)
+    assert result.heat_transfer_coeff_w_m2k == pytest.approx(3132.92514, rel=1e-6)
+    assert result.fin_efficiency == pytest.approx(0.970562006, rel=1e-6)
+    assert result.resistances_k_per_w["convection"] == pytest.approx(0.0363575237, rel=1e-6)
+    assert result.resistances_k_per_w["base_conduction"] == pytest.approx(0.00207792208, rel=1e-6)
+    assert result.resistances_k_per_w["total"] == pytest.approx(0.0984354457, rel=1e-6)
+    assert result.coolant_rise_c == pytest.approx(5.75890350, rel=1e-6)
+    assert result.junction_temp_c == pytest.approx(106.627808, rel=1e-6)
+    assert abs(result.junction_temp_c - 106.627808) < 1.0
+    assert result.pressure_drop_pa == pytest.approx(1469.51950, rel=1e-6)
+    assert result.pump_power_w == pytest.approx(0.0979679665, rel=1e-6)
+
+
+def test_straight_fin_efficiency_bounded_and_falls_with_fin_height():
+    """G4: 0 < eta <= 1, and eta falls as fins get taller at fixed width and thickness."""
+    etas = []
+    for height_mm in (0.5, 1.0, 2.0, 3.75, 6.0, 10.0):
+        result = analyze(AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=1.5, geometry=_screen_1d_geometry(channel_height_m=height_mm * 1e-3)))
+        assert result.fin_efficiency is not None
+        assert 0.0 < result.fin_efficiency <= 1.0
+        etas.append(result.fin_efficiency)
+    assert all(later < earlier for earlier, later in zip(etas, etas[1:])), etas
+
+
+def test_straight_fin_efficiency_rises_with_conductivity():
+    """G4: higher fin conductivity gives higher fin efficiency."""
+    etas = []
+    for k in (50.0, 150.0, 385.0, 1000.0):
+        result = analyze(AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=1.5, geometry=_screen_1d_geometry(copper_k_w_mk=k)))
+        etas.append(result.fin_efficiency)
+    assert all(later > earlier for earlier, later in zip(etas, etas[1:])), etas
+
+
+def test_straight_fin_r_conv_approaches_full_fin_area_limit():
+    """G4: as k grows large, eta -> 1 and R_conv -> 1 / (N L h (w + 2H))."""
+    g = _screen_1d_geometry(copper_k_w_mk=1.0e9)
+    result = analyze(AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=1.5, geometry=g))
+    limit = 1.0 / (g.channel_count * g.channel_length_m * result.heat_transfer_coeff_w_m2k * (g.channel_width_m + 2 * g.channel_height_m))
+    assert result.fin_efficiency == pytest.approx(1.0, rel=1e-6)
+    assert result.resistances_k_per_w["convection"] == pytest.approx(limit, rel=1e-6)
+
+
+def test_straight_fin_pressure_drop_independent_of_fin_thickness():
+    """G4: at fixed N, w, H the flow area and Dh do not involve t, so ΔP does not change."""
+    drops = [
+        analyze(AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=1.5, geometry=_screen_1d_geometry(fin_thickness_m=t))).pressure_drop_pa
+        for t in (0.1e-3, 0.39e-3, 1.0e-3)
+    ]
+    assert drops[0] == pytest.approx(drops[1], rel=1e-12)
+    assert drops[2] == pytest.approx(drops[1], rel=1e-12)
+
+
+def test_straight_fin_correlations_symmetric_under_width_height_swap():
+    """G4: Nu and f·Re depend on alpha = short/long side only, so swapping w and H changes neither."""
+    a_inp = AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=1.5, geometry=_screen_1d_geometry())
+    b_inp = AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=1.5, geometry=_screen_1d_geometry(channel_width_m=3.75e-3, channel_height_m=0.39e-3))
+    a, b = analyze(a_inp), analyze(b_inp)
+    assert a.reynolds == pytest.approx(b.reynolds, rel=1e-12)
+    assert a.nusselt == pytest.approx(b.nusselt, rel=1e-12)
+    assert _darcy_f_re(a, a_inp) == pytest.approx(_darcy_f_re(b, b_inp), rel=1e-9)
+
+
+def test_straight_fin_geometry_validation_errors():
+    """G4: straight_fin requires fin_thickness_m; fin_thickness_m with full_wetted_area is rejected."""
+    with pytest.raises(ValueError, match="requires fin_thickness_m"):
+        Geometry(channel_model="straight_fin")
+    with pytest.raises(ValueError, match="only accepted with channel_model='straight_fin'"):
+        Geometry(fin_thickness_m=0.5e-3)
+    with pytest.raises(ValueError, match="only accepted with channel_model='straight_fin'"):
+        Geometry(channel_model="full_wetted_area", fin_thickness_m=0.5e-3)
+    with pytest.raises(ValueError):
+        Geometry(channel_model="straight_fin", fin_thickness_m=0.0)
+    with pytest.raises(ValueError):
+        Geometry(channel_model="pin_fin")
+
+
+@pytest.mark.parametrize("boundary_re", [2300.0, 4000.0])
+def test_straight_fin_nu_and_friction_continuous_at_regime_boundaries(boundary_re: float):
+    """G4: on the straight_fin path Nu and f are continuous across Re = 2300 and Re = 4000."""
+    g = _screen_1d_geometry()
+    below_inp = _fin_input_at_re(boundary_re * (1 - 1e-9), g)
+    above_inp = _fin_input_at_re(boundary_re * (1 + 1e-9), g)
+    below, above = analyze(below_inp), analyze(above_inp)
+    assert below.regime != above.regime
+    assert above.nusselt == pytest.approx(below.nusselt, rel=1e-6)
+    f_below = _darcy_f_re(below, below_inp) / below.reynolds
+    f_above = _darcy_f_re(above, above_inp) / above.reynolds
+    assert f_above == pytest.approx(f_below, rel=1e-6)
+    assert above.fin_efficiency == pytest.approx(below.fin_efficiency, rel=1e-6)
+
+
+def test_straight_fin_laminar_endpoint_feeds_transition_blend():
+    """At Re = 2300 the blend starts from the Shah & London values, not 4.36 and 64."""
+    inp = _fin_input_at_re(2300.0 * (1 + 1e-12), _screen_1d_geometry())
+    result = analyze(inp)
+    assert result.regime == "transitional"
+    # alpha = 0.39 / 3.75 = 0.104; Nu_H1(0.104) = 6.738931 (as in G2);
+    # Darcy f·Re(0.104) = 96 × (1 − 1.3553·0.104 + 1.9467·0.104² − 1.7012·0.104³
+    #                          + 0.9564·0.104⁴ − 0.2537·0.104⁵) = 84.316751
+    assert result.nusselt == pytest.approx(6.738931, rel=1e-6)
+    assert _darcy_f_re(result, inp) == pytest.approx(84.316751, rel=1e-6)
+
+
+def test_straight_fin_out_of_range_warning_only_at_or_above_re_2300():
+    """G4: the laminar-only warning appears at Re >= 2300 and not below."""
+    g = _screen_1d_geometry()
+    below = analyze(_fin_input_at_re(2300.0 * (1 - 1e-9), g))
+    at = analyze(_fin_input_at_re(2300.0 * (1 + 1e-12), g))
+    turbulent = analyze(_fin_input_at_re(6000.0, g))
+    assert _FIN_RANGE_WARNING not in below.warnings
+    assert _FIN_RANGE_WARNING in at.warnings
+    assert _FIN_RANGE_WARNING in turbulent.warnings
+
+
+def test_straight_fin_warnings_replace_only_the_rectangular_channel_warning():
+    """The straight_fin path swaps the effective-area warning for the fin-model warning."""
+    laminar = analyze(AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=1.5, inlet_temp_c=35.0, geometry=_screen_1d_geometry()))
+    assert laminar.warnings == [
+        _FIN_WARNING,
+        "coolant properties are fixed at nominal 25°C values; inlet temperature differs from the property reference",
+        "no measured cold-plate validation is included; absolute temperature and pressure results are screening estimates",
+        "very low Reynolds number; risk of poor flow distribution",
+    ]
+    transitional = analyze(_fin_input_at_re(3000.0, _screen_1d_geometry()))
+    assert transitional.warnings == [
+        "transitional-flow correlation is a numerical blend, not an experimentally validated transition model",
+        _FIN_WARNING,
+        _FIN_RANGE_WARNING,
+        "no measured cold-plate validation is included; absolute temperature and pressure results are screening estimates",
+    ]
+    assert not any("rectangular-channel correlations" in warning for warning in laminar.warnings + transitional.warnings)
+
+
+def test_straight_fin_energy_balance_closes():
+    """G6: Q = m_dot·cp·ΔT and Tj − T_bulk = Q·R_total on the straight_fin path."""
+    for coolant, rho, cp in (("water", 997.0, 4180.0), ("glycol50", 1060.0, 3400.0)):
+        for flow_lpm in (1.5, 20.0):
+            result = analyze(AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=flow_lpm, coolant=coolant, geometry=_screen_1d_geometry()))
+            m_dot = flow_lpm / 60000.0 * rho
+            assert m_dot * cp * result.coolant_rise_c == pytest.approx(1000.0, rel=1e-2)
+            assert m_dot * cp * result.coolant_rise_c == pytest.approx(1000.0, rel=1e-12)
+            t_bulk = 25.0 + 0.5 * result.coolant_rise_c
+            assert (result.junction_temp_c - t_bulk) / result.resistances_k_per_w["total"] == pytest.approx(1000.0, rel=1e-12)
+
+
+def test_full_wetted_area_is_the_unchanged_default():
+    """G5: the default and an explicit full_wetted_area give identical output, with fin_efficiency None."""
+    default = analyze(AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, coolant="water"))
+    explicit = analyze(AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, coolant="water", geometry=Geometry(channel_model="full_wetted_area")))
+    assert Geometry().channel_model == "full_wetted_area"
+    assert Geometry().fin_thickness_m is None
+    assert default.fin_efficiency is None
+    assert explicit.model_dump() == default.model_dump()
+
+
+def test_straight_fin_rack_and_sensitivity_pass_geometry_through():
+    """Rack and sensitivity helpers run on the straight_fin path without special handling."""
+    g = _screen_1d_geometry()
+    single = analyze(AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=1.5, geometry=g))
+    rack = analyze_rack(AnalyzeRackInput(gpu_count=2, topology="parallel", heat_load_per_gpu_w=1000.0, total_flow_lpm=3.0, geometry=g))
+    assert rack.max_junction_temp_c == pytest.approx(single.junction_temp_c, rel=1e-12)
+    assert any(_FIN_WARNING in warning for warning in rack.warnings)
+    sens = compute_sensitivity(AnalyzeColdplateInput(heat_load_w=1000.0, flow_rate_lpm=1.5, geometry=g))
+    assert sens.dtj_dr_tim_c_per_kw == pytest.approx(1000.0, rel=1e-6)

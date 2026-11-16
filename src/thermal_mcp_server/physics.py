@@ -7,6 +7,7 @@ are documented inline. See docs/physics.md for full derivation and scope.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from .schemas import (
@@ -50,27 +51,44 @@ def _flow_quantities(inp: AnalyzeColdplateInput) -> tuple[float, float, float, f
     return flow_m3s, velocity, re, pr, dh
 
 
-def _nusselt(re: float, pr: float) -> tuple[float, FlowRegime]:
+def _nusselt(re: float, pr: float, nu_lam: float = 4.36) -> tuple[float, FlowRegime]:
+    # nu_lam defaults to the full_wetted_area constant; the straight_fin path
+    # passes the aspect-ratio Shah & London value as the laminar endpoint.
     if re < 2300:
-        return 4.36, "laminar"
+        return nu_lam, "laminar"
     if re > 4000:
         return 0.023 * re**0.8 * pr**0.4, "turbulent"
-    nu_lam = 4.36
     nu_turb = 0.023 * 4000**0.8 * pr**0.4
     blend = (re - 2300) / (4000 - 2300)
     return nu_lam * (1 - blend) + nu_turb * blend, "transitional"
 
 
-def _friction_factor(re: float) -> float:
+def _friction_factor(re: float, f_re_lam: float = 64.0) -> float:
+    # f_re_lam is the laminar Darcy f·Re; 64 for full_wetted_area.
     if re < 2300:
-        return 64.0 / max(re, 1e-6)
+        return f_re_lam / max(re, 1e-6)
     if re > 4000:
         return 0.3164 * re ** (-0.25)
     # Transition regime: linear blend matching Nusselt treatment (Re 2300–4000)
-    f_lam = 64.0 / 2300.0
+    f_lam = f_re_lam / 2300.0
     f_turb = 0.3164 * 4000 ** (-0.25)
     blend = (re - 2300) / (4000 - 2300)
     return f_lam * (1 - blend) + f_turb * blend
+
+
+def _nu_h1_rectangular(alpha: float) -> float:
+    """Fully developed laminar Nu (H1 boundary condition, four walls heated) for a
+    rectangular duct of aspect ratio alpha = short side / long side, 0 < alpha <= 1.
+    Shah & London (1978) polynomial; see docs/physics.md Section I."""
+    a = alpha
+    return 8.235 * (1 - 2.0421 * a + 3.0853 * a**2 - 2.4765 * a**3 + 1.0578 * a**4 - 0.1861 * a**5)
+
+
+def _f_re_darcy_rectangular(alpha: float) -> float:
+    """Fully developed laminar Darcy f·Re (= 4 × Fanning f·Re) for a rectangular duct.
+    Shah & London (1978) polynomial; see docs/physics.md Section I."""
+    a = alpha
+    return 96 * (1 - 1.3553 * a + 1.9467 * a**2 - 1.7012 * a**3 + 0.9564 * a**4 - 0.2537 * a**5)
 
 
 def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
@@ -82,6 +100,10 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     band. Pressure drop uses ΔP = f·(L/Dh)·(ρv²/2) with laminar, transitional,
     or Blasius friction factors.
 
+    With ``geometry.channel_model == "straight_fin"`` the laminar Nu and f·Re are
+    the Shah & London aspect-ratio forms, and R_conv uses adiabatic-tip fin
+    efficiency (reported as ``fin_efficiency``); see docs/physics.md Section I.
+
     Pump power assumes a fixed 50% efficiency. Warnings identify applicability
     limits and evidence gaps; they do not change the numerical result.
 
@@ -92,12 +114,27 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     geom = inp.geometry
     flow_m3s, velocity, re, pr, dh = _flow_quantities(inp)
 
-    nu, regime = _nusselt(re, pr)
-    h = nu * props.k_w_mk / dh
+    fin_efficiency: float | None = None
+    if geom.channel_model == "straight_fin":
+        assert geom.fin_thickness_m is not None  # enforced by Geometry validation
+        w, fin_h = geom.channel_width_m, geom.channel_height_m
+        alpha = min(w, fin_h) / max(w, fin_h)
+        f_re_lam = _f_re_darcy_rectangular(alpha)
+        nu, regime = _nusselt(re, pr, _nu_h1_rectangular(alpha))
+        h = nu * props.k_w_mk / dh
+        # ASSUMPTION: adiabatic-tip straight fins of height = channel height, made
+        # of the base material; channel floor at eta = 1; channel cover adiabatic.
+        m_fin = math.sqrt(2 * h / (geom.copper_k_w_mk * geom.fin_thickness_m))
+        fin_efficiency = math.tanh(m_fin * fin_h) / (m_fin * fin_h)
+        r_conv = 1.0 / (geom.channel_count * geom.channel_length_m * h * (w + 2 * fin_efficiency * fin_h))
+    else:
+        f_re_lam = 64.0
+        nu, regime = _nusselt(re, pr)
+        h = nu * props.k_w_mk / dh
 
-    # Rectangular channel: wetted perimeter = 2 * (width + height) per channel.
-    wetted_area = geom.channel_count * 2 * (geom.channel_width_m + geom.channel_height_m) * geom.channel_length_m
-    r_conv = 1.0 / (h * wetted_area)
+        # Rectangular channel: wetted perimeter = 2 * (width + height) per channel.
+        wetted_area = geom.channel_count * 2 * (geom.channel_width_m + geom.channel_height_m) * geom.channel_length_m
+        r_conv = 1.0 / (h * wetted_area)
     r_base = geom.base_thickness_m / (geom.copper_k_w_mk * geom.contact_area_m2)
     r_total = inp.r_jc_k_per_w + inp.r_tim_k_per_w + r_base + r_conv
 
@@ -106,7 +143,7 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     t_bulk = inp.inlet_temp_c + 0.5 * coolant_rise
     t_j = t_bulk + inp.heat_load_w * r_total
 
-    f = _friction_factor(re)
+    f = _friction_factor(re, f_re_lam)
     dp = f * (geom.channel_length_m / dh) * (props.density_kg_m3 * velocity**2 / 2)
     # ASSUMPTION: fixed 50% pump efficiency; a pump curve is outside this model.
     pump_power = dp * flow_m3s / 0.5
@@ -114,7 +151,15 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     warnings: list[str] = []
     if regime == "transitional":
         warnings.append("transitional-flow correlation is a numerical blend, not an experimentally validated transition model")
-    warnings.append("rectangular-channel correlations and effective heated-area assumption are unvalidated for this geometry")
+    if geom.channel_model == "straight_fin":
+        warnings.append(
+            "straight-fin model assumes fully developed laminar flow with an adiabatic cover; "
+            "entrance effects, fin-tip heat transfer and flow maldistribution are not modeled"
+        )
+        if re >= 2300:
+            warnings.append("straight-fin correlations were checked for laminar flow only; this operating point is outside that range")
+    else:
+        warnings.append("rectangular-channel correlations and effective heated-area assumption are unvalidated for this geometry")
     if abs(inp.inlet_temp_c - 25.0) > 1e-9:
         warnings.append("coolant properties are fixed at nominal 25°C values; inlet temperature differs from the property reference")
     warnings.append("no measured cold-plate validation is included; absolute temperature and pressure results are screening estimates")
@@ -139,6 +184,7 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
             "total": r_total,
         },
         warnings=warnings,
+        fin_efficiency=fin_efficiency,
     )
 
 
