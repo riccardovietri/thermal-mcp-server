@@ -1,8 +1,7 @@
 # Work plan: model fidelity track
 
-Status: **draft for owner review**, written 2026-11-15. Nothing here is approved policy until
-Riccardo signs off the decisions in the "Owner decisions" table; record accepted ones in
-`docs/decisions.md`.
+Status: **accepted 2026-11-15**. Riccardo accepted the recommendation for each of D1 to D7 in the
+"Owner decisions" table; the durable record is in `docs/decisions.md`. Briefs live in `docs/briefs/`.
 
 Sources: `docs/fable-handoff.md` (findings from `thermal-design-loop`), `docs/product-thesis-review.md`
 (Milestones 1 to 3), `docs/milestone-1-contract.md`.
@@ -108,7 +107,11 @@ it is not in scope until the results exist.
 
 ## Owner decisions
 
-| ID | Decision | Blocks | Recommendation |
+All seven recommendations were accepted on 2026-11-15. Three details stay open and are settled in
+the brief for their piece: the flow per kW of the reference case (D3), the cited glycol property
+source (D4), and the wording of any narrowed applicability warning (P1, P2).
+
+| ID | Decision | Blocks | Recommendation (accepted) |
 |---|---|---|---|
 | D1 | Is Milestone 1 accepted as merged? `CLAUDE.md` still says "complete and review Milestone 1" | Updating next steps in `CLAUDE.md` | Confirm, then point "Current next steps" at this plan |
 | D2 | Correct the existing rectangular path, moving the 70.9 °C headline? | P2 | Yes, as its own pull request after P1 |
