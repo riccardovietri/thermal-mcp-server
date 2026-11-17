@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CoolantName = Literal["water", "glycol50"]
 FlowRegime = Literal["laminar", "transitional", "turbulent"]
+ChannelModel = Literal["full_wetted_area", "straight_fin"]
 
 
 class Geometry(BaseModel):
@@ -18,6 +19,15 @@ class Geometry(BaseModel):
     Dh = 2 × width × height / (width + height).
     Defaults represent a typical copper cold plate: 40 × 1 mm square channels,
     80 mm long, 2 mm base, 100 cm² contact area.
+
+    ``channel_model`` selects the convection model. ``"full_wetted_area"`` (the
+    default) is the original model: constant laminar Nu = 4.36 and f·Re = 64 with
+    the full channel perimeter as heated area. ``"straight_fin"`` treats the walls
+    between channels as straight rectangular fins of thickness ``fin_thickness_m``
+    (channel height = fin height), with aspect-ratio-dependent laminar Nu (H1) and
+    f·Re and adiabatic-tip fin efficiency; fins use ``copper_k_w_mk``. See
+    docs/physics.md Section I. ``fin_thickness_m`` is required for
+    ``"straight_fin"`` and rejected for ``"full_wetted_area"``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -29,6 +39,23 @@ class Geometry(BaseModel):
     base_thickness_m: float = Field(default=2.0e-3, gt=0, description="Cold plate base (spreader) thickness in metres")
     contact_area_m2: float = Field(default=0.01, gt=0, description="Chip-to-cold-plate contact area in m² (default 100 cm²)")
     copper_k_w_mk: float = Field(default=385.0, gt=0, description="Base plate thermal conductivity in W/(m·K); default is pure copper")
+    channel_model: ChannelModel = Field(
+        default="full_wetted_area",
+        description="Convection model: 'full_wetted_area' (original) or 'straight_fin' (laminar straight fins with fin efficiency)",
+    )
+    fin_thickness_m: float | None = Field(
+        default=None,
+        gt=0,
+        description="Fin (wall) thickness between channels in metres; required for and only accepted with channel_model='straight_fin'",
+    )
+
+    @model_validator(mode="after")
+    def fin_thickness_matches_channel_model(self) -> "Geometry":
+        if self.channel_model == "straight_fin" and self.fin_thickness_m is None:
+            raise ValueError("channel_model='straight_fin' requires fin_thickness_m")
+        if self.channel_model == "full_wetted_area" and self.fin_thickness_m is not None:
+            raise ValueError("fin_thickness_m is only accepted with channel_model='straight_fin'")
+        return self
 
 
 class AnalyzeColdplateInput(BaseModel):
@@ -85,6 +112,7 @@ class AnalyzeColdplateOutput(BaseModel):
     resistances_k_per_w: dict[str, float]
     warnings: list[str]
     sensitivity: SensitivityOutput | None = None
+    fin_efficiency: float | None = None
 
 
 class CompareCoolantsInput(BaseModel):

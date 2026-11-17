@@ -33,6 +33,11 @@ Public Python API: `analyze()`, `analyze_rack()`, and `optimize_flow()` in `phys
 - Darcy-Weisbach ΔP with Blasius friction, same transition blend
 - Pump power = ΔP × Q / 0.50 (50% efficiency assumption, documented inline)
 - Binary-search flow optimization
+- Optional straight-fin channel model (`geometry.channel_model = "straight_fin"`,
+  needs `fin_thickness_m`): Shah & London laminar Nu (H1) and f·Re by aspect
+  ratio, adiabatic-tip fin efficiency. Checked for laminar flow only; Re ≥ 2300
+  is computed with a warning. See `docs/physics.md` Section I. The default
+  `"full_wetted_area"` path and its numbers are unchanged.
 - Rack-level model: N identical GPUs in series or parallel topology
   (see `docs/physics.md` Section G)
 

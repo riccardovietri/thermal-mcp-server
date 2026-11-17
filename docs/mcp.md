@@ -34,7 +34,7 @@ Inputs (stable):
 - `inlet_temp_c`, `ambient_temp_c`
 - `coolant`: `"water" | "glycol50"`
 - `r_jc_k_per_w`, `r_tim_k_per_w`
-- `geometry` object
+- `geometry` object (see [Geometry object](#geometry-object))
 
 Output shape:
 - `junction_temp_c`
@@ -42,6 +42,35 @@ Output shape:
 - `pressure_drop_pa`, `pump_power_w`
 - `reynolds`, `regime`, `nusselt`, `heat_transfer_coeff_w_m2k`
 - `coolant_rise_c`, `warnings`
+- `fin_efficiency`: adiabatic-tip fin efficiency for `channel_model: "straight_fin"`, otherwise `null`
+
+### Geometry object
+
+Every tool that takes `geometry` accepts the same object; omitted keys use the
+defaults and unknown keys are rejected. Keys: `channel_count`, `channel_width_m`,
+`channel_height_m`, `channel_length_m`, `base_thickness_m`, `contact_area_m2`,
+`copper_k_w_mk`, and:
+
+- `channel_model`: `"full_wetted_area"` (default, the original model) or
+  `"straight_fin"` (laminar straight fins with Shah & London aspect-ratio
+  correlations and fin efficiency; see `docs/physics.md` Section I).
+- `fin_thickness_m`: fin (wall) thickness in metres, `> 0`. Required with
+  `"straight_fin"`; supplying it with `"full_wetted_area"` is a validation error,
+  returned in the `{ "error": [...] }` envelope.
+
+In a decision report, `model.applicability_notices` follows `channel_model`: with
+`"straight_fin"` the rectangular-channel correlation notice is replaced by the
+straight-fin assumptions notice. The other notices are unchanged.
+
+```jsonc
+// straight-fin request
+{"heat_load_w": 1000.0, "flow_rate_lpm": 1.5, "coolant": "water",
+ "geometry": {"channel_count": 76, "channel_width_m": 0.00039, "channel_height_m": 0.00375,
+              "channel_length_m": 0.06, "contact_area_m2": 0.0035568,
+              "channel_model": "straight_fin", "fin_thickness_m": 0.00039}}
+// response (abridged): reynolds 178.02, nusselt 6.739, fin_efficiency 0.7495,
+// pressure_drop_pa 1014.39, junction_temp_c 97.63, plus the straight-fin warning
+```
 
 ## 2) `compare_coolants`
 Purpose: compare water vs 50/50 glycol under identical load and geometry.
@@ -113,6 +142,7 @@ Optional inputs:
   These are illustrative scenarios, not probability or service-life models.
 - `input_source_notes`: caller-provided notes keyed by resolved field path, such
   as `heat_load_w` or `geometry.channel_count`. A note is not verified evidence.
+  `input_provenance` includes `geometry.channel_model` and `geometry.fin_thickness_m`.
 
 Read `report_schema_version` (2) and `status` first:
 

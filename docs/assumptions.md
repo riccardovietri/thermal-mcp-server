@@ -28,6 +28,18 @@ for the kinds of factors that affect rectangular-channel correlations. The model
 also does not represent local maldistribution, detailed fin geometry, 2D
 spreading, fouling, or manufacturing variation.
 
+An optional straight-fin model is selected with `geometry.channel_model =
+"straight_fin"` and requires `geometry.fin_thickness_m` (the wall thickness
+between channels; channel height is the fin height). It uses aspect-ratio
+dependent fully developed laminar Nu (H1) and f·Re (Shah & London 1978) and
+adiabatic-tip fin efficiency with `copper_k_w_mk`, takes the channel floor at full
+effectiveness and the cover as adiabatic, and reports `fin_efficiency`. It does
+not model entrance effects, fin-tip or cover heat transfer, maldistribution, or
+check that the fins fit the plate footprint. Above Re = 2300 it reuses the
+transition blend and turbulent closures and warns that this range is outside
+what the correlations were checked for. Supplying `fin_thickness_m` with the
+default `"full_wetted_area"` model is rejected. See `docs/physics.md` Section I.
+
 ## Heat Load And Package Resistance
 
 Heat load is a steady-state chip power input. `R_jc` and `R_tim` are explicit
@@ -58,6 +70,7 @@ measured cold-plate or rack dataset and no proprietary calibration.
 |---|---|---|
 | Thermal and hydraulic equations are implemented deterministically | Source equations, hand calculations, and regression tests | Implementation correctness and repeatability; not hardware accuracy |
 | Rectangular-channel heat transfer and pressure drop are represented | Hydraulic diameter plus laminar/turbulent approximations | Conditional first-pass estimates; arbitrary geometry and correlation validity are not established |
+| The straight-fin option reproduces its reference implementation | Shah & London table check, `screen_1d` reproduction to 1e-6, and a hand calculation | Implementation agreement for fully developed laminar flow; no measured plate data, and Re ≥ 2300 is outside the checked range |
 | Rack series/parallel aggregation is consistent | Two-GPU hand-calculation tests and invariants | Ideal identical-GPU aggregation with equal flow and no manifold losses |
 | Sensitivity output identifies possible decision drivers | Finite-difference tests and explicit perturbations | Illustrative model deltas; no probability, population tolerance, or lifetime claim |
 | Public accelerator scenarios are usable inputs | Source labels and estimate/proxy labels in `docs/public_specs.md` and examples | Scenario exploration only; public TDP or limit data do not validate thermal predictions |

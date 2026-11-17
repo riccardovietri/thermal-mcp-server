@@ -322,3 +322,29 @@ def test_mcp_impl_returns_error_envelope_for_invalid_report_inputs(kwargs):
     result = generate_decision_report_impl(**kwargs)
 
     assert "error" in result
+
+
+def test_applicability_notices_follow_channel_model():
+    from thermal_mcp_server.decision_report import APPLICABILITY_NOTICES
+    from thermal_mcp_server.schemas import Geometry
+
+    default_report = generate_decision_report(_scenario(flow_rate_lpm=8.0))
+    fin_geometry = Geometry(
+        channel_count=76,
+        channel_width_m=0.39e-3,
+        channel_height_m=3.75e-3,
+        channel_length_m=0.06,
+        contact_area_m2=3.5568e-3,
+        channel_model="straight_fin",
+        fin_thickness_m=0.39e-3,
+    )
+    fin_report = generate_decision_report(_scenario(heat_load_w=1000.0, flow_rate_lpm=1.5, target_junction_temp_c=110.0, geometry=fin_geometry))
+
+    default_notices = default_report.model.applicability_notices
+    fin_notices = fin_report.model.applicability_notices
+    assert default_notices == APPLICABILITY_NOTICES
+    assert len(fin_notices) == len(default_notices)
+    assert not any("rectangular-channel" in notice.lower() for notice in fin_notices)
+    assert sum("straight-fin model assumes fully developed laminar flow" in notice.lower() for notice in fin_notices) == 1
+    changed = [i for i, (a, b) in enumerate(zip(default_notices, fin_notices)) if a != b]
+    assert changed == [1]

@@ -3956,6 +3956,7 @@ demo = [
     { name = "pandas", version = "3.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 dev = [
+    { name = "matplotlib" },
     { name = "mypy" },
     { name = "nbmake" },
     { name = "pytest" },
@@ -3965,6 +3966,7 @@ dev = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "matplotlib" },
     { name = "mypy" },
     { name = "nbmake" },
     { name = "pytest" },
@@ -3978,6 +3980,7 @@ requires-dist = [
     { name = "ipywidgets", marker = "extra == 'demo'", specifier = ">=8.1.0" },
     { name = "jupyter", marker = "extra == 'demo'", specifier = ">=1.1.0" },
     { name = "matplotlib", marker = "extra == 'demo'", specifier = ">=3.8.0" },
+    { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "nbmake", marker = "extra == 'dev'", specifier = ">=1.5.0" },
     { name = "pandas", marker = "extra == 'demo'", specifier = ">=2.2.0" },
@@ -3990,6 +3993,7 @@ provides-extras = ["dev", "demo"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "matplotlib", specifier = ">=3.8.0" },
     { name = "mypy", specifier = ">=1.13.0" },
     { name = "nbmake", specifier = ">=1.5.0" },
     { name = "pytest", specifier = ">=9.0.2" },

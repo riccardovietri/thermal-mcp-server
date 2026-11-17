@@ -42,6 +42,19 @@ APPLICABILITY_NOTICES: list[str] = [
     "No measured cold-plate or rack calibration is included; numeric precision is not model accuracy.",
 ]
 
+_RECTANGULAR_CHANNEL_NOTICE = APPLICABILITY_NOTICES[1]
+_STRAIGHT_FIN_NOTICE = (
+    "Straight-fin model assumes fully developed laminar flow with an adiabatic cover; "
+    "entrance effects, fin-tip heat transfer and flow maldistribution are not modeled."
+)
+
+
+def _applicability_notices(channel_model: str) -> list[str]:
+    if channel_model != "straight_fin":
+        return list(APPLICABILITY_NOTICES)
+    return [_STRAIGHT_FIN_NOTICE if notice == _RECTANGULAR_CHANNEL_NOTICE else notice for notice in APPLICABILITY_NOTICES]
+
+
 _FLOW_MIN_LPM = 0.5
 _FLOW_MAX_LPM = 60.0
 
@@ -513,7 +526,9 @@ def generate_decision_report(scenario: DecisionScenario) -> DecisionReport:
         stress_scenarios=stress_results,
         resolved_scenario=_resolved_scenario(scenario),
         input_provenance=_input_provenance(scenario),
-        model=ModelMetadata(package_version=_package_version(), applicability_notices=APPLICABILITY_NOTICES),
+        model=ModelMetadata(
+            package_version=_package_version(), applicability_notices=_applicability_notices(_resolve_geometry(scenario.geometry).channel_model)
+        ),
         warnings=warnings,
         blind_spots=KNOWN_LIMITATIONS,
         rendered_memo="",
