@@ -51,9 +51,9 @@ def _flow_quantities(inp: AnalyzeColdplateInput) -> tuple[float, float, float, f
     return flow_m3s, velocity, re, pr, dh
 
 
-def _nusselt(re: float, pr: float, nu_lam: float = 4.36) -> tuple[float, FlowRegime]:
-    # nu_lam defaults to the full_wetted_area constant; the straight_fin path
-    # passes the aspect-ratio Shah & London value as the laminar endpoint.
+def _nusselt(re: float, pr: float, nu_lam: float) -> tuple[float, FlowRegime]:
+    # nu_lam is the laminar Nu for the channel aspect ratio (Shah & London H1);
+    # it is required so no caller falls back to a circular-tube constant.
     if re < 2300:
         return nu_lam, "laminar"
     if re > 4000:
@@ -63,8 +63,8 @@ def _nusselt(re: float, pr: float, nu_lam: float = 4.36) -> tuple[float, FlowReg
     return nu_lam * (1 - blend) + nu_turb * blend, "transitional"
 
 
-def _friction_factor(re: float, f_re_lam: float = 64.0) -> float:
-    # f_re_lam is the laminar Darcy f·Re; 64 for full_wetted_area.
+def _friction_factor(re: float, f_re_lam: float) -> float:
+    # f_re_lam is the laminar Darcy f·Re for the channel aspect ratio (Shah & London).
     if re < 2300:
         return f_re_lam / max(re, 1e-6)
     if re > 4000:
@@ -98,10 +98,10 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     ΔT_coolant = Q / (ṁ · cp), and Tj = Tin + 0.5·ΔT_coolant + Q·R_total.
     Convection uses a Dittus-Boelter / laminar Nusselt blend over the transition
     band. Pressure drop uses ΔP = f·(L/Dh)·(ρv²/2) with laminar, transitional,
-    or Blasius friction factors.
+    or Blasius friction factors. The laminar Nu and f·Re are the Shah & London
+    rectangular-duct forms at the channel aspect ratio for both channel models.
 
-    With ``geometry.channel_model == "straight_fin"`` the laminar Nu and f·Re are
-    the Shah & London aspect-ratio forms, and R_conv uses adiabatic-tip fin
+    With ``geometry.channel_model == "straight_fin"`` R_conv uses adiabatic-tip fin
     efficiency (reported as ``fin_efficiency``); see docs/physics.md Section I.
 
     Pump power assumes a fixed 50% efficiency. Warnings identify applicability
@@ -114,24 +114,24 @@ def analyze(inp: AnalyzeColdplateInput) -> AnalyzeColdplateOutput:
     geom = inp.geometry
     flow_m3s, velocity, re, pr, dh = _flow_quantities(inp)
 
+    # Both channel models use the Shah & London rectangular-duct laminar forms
+    # (H1, four walls heated) at the channel aspect ratio; see docs/physics.md.
+    w, ch_h = geom.channel_width_m, geom.channel_height_m
+    alpha = min(w, ch_h) / max(w, ch_h)
+    f_re_lam = _f_re_darcy_rectangular(alpha)
+    nu, regime = _nusselt(re, pr, _nu_h1_rectangular(alpha))
+    h = nu * props.k_w_mk / dh
+
     fin_efficiency: float | None = None
     if geom.channel_model == "straight_fin":
         assert geom.fin_thickness_m is not None  # enforced by Geometry validation
-        w, fin_h = geom.channel_width_m, geom.channel_height_m
-        alpha = min(w, fin_h) / max(w, fin_h)
-        f_re_lam = _f_re_darcy_rectangular(alpha)
-        nu, regime = _nusselt(re, pr, _nu_h1_rectangular(alpha))
-        h = nu * props.k_w_mk / dh
+        fin_h = ch_h
         # ASSUMPTION: adiabatic-tip straight fins of height = channel height, made
         # of the base material; channel floor at eta = 1; channel cover adiabatic.
         m_fin = math.sqrt(2 * h / (geom.copper_k_w_mk * geom.fin_thickness_m))
         fin_efficiency = math.tanh(m_fin * fin_h) / (m_fin * fin_h)
         r_conv = 1.0 / (geom.channel_count * geom.channel_length_m * h * (w + 2 * fin_efficiency * fin_h))
     else:
-        f_re_lam = 64.0
-        nu, regime = _nusselt(re, pr)
-        h = nu * props.k_w_mk / dh
-
         # Rectangular channel: wetted perimeter = 2 * (width + height) per channel.
         wetted_area = geom.channel_count * 2 * (geom.channel_width_m + geom.channel_height_m) * geom.channel_length_m
         r_conv = 1.0 / (h * wetted_area)
