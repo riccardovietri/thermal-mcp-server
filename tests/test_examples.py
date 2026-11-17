@@ -76,8 +76,13 @@ def test_make_figures_runs_and_is_deterministic(tmp_path: Path):
     pytest.importorskip("matplotlib")
     first = tmp_path / "first"
     second = tmp_path / "second"
-    assert "straight_fin_correlations.png" in _run_example("make_figures.py", "--out", str(first))
+    output = _run_example("make_figures.py", "--out", str(first))
+    assert "straight_fin_correlations.png" in output
     _run_example("make_figures.py", "--out", str(second))
     png = (first / "straight_fin_correlations.png").read_bytes()
     assert png.startswith(b"\x89PNG")
     assert png == (second / "straight_fin_correlations.png").read_bytes()
+    assert "default_plate_tj_vs_flow.png" in output
+    flow_png = (first / "default_plate_tj_vs_flow.png").read_bytes()
+    assert flow_png.startswith(b"\x89PNG")
+    assert flow_png == (second / "default_plate_tj_vs_flow.png").read_bytes()
