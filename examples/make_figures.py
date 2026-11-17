@@ -139,7 +139,7 @@ def default_plate_tj_vs_flow(out_dir: Path) -> Path:
     top = ax_t.get_ylim()[1]
     for x, text in ((q_lam / 2, "laminar"), ((q_lam + q_turb) / 2, "transition"), ((q_turb + 12.5) / 2, "turbulent")):
         ax_t.text(x, top, text, ha="center", va="top", fontsize=8, color="#555555")
-    ax_t.legend(fontsize=8, frameon=False, loc="center right")
+    ax_t.legend(fontsize=8, frameon=False, loc="upper right", bbox_to_anchor=(1.0, 0.93))
     ax_t.set_title("Default plate, 700 W, water, 25 °C inlet", fontsize=10)
     ax_p.set_title("Cold-plate pressure drop", fontsize=10)
     fig.tight_layout()
