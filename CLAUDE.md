@@ -133,7 +133,9 @@ The original priority gaps are now merged:
 
 ## Current next steps
 
-- Complete and review Milestone 1 before starting constrained hydraulic sizing.
+- Milestone 1 is accepted. Work the model fidelity track in `docs/work-plan.md`
+  (state in `PROGRESS.md`, briefs in `docs/briefs/`) before starting constrained
+  hydraulic sizing (Milestone 2).
 - Keep the governing equations and worked case discoverable in `docs/model_overview.md`.
 - Preserve the distinction between equation verification and measured validation.
 

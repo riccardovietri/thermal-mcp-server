@@ -4,6 +4,29 @@ Durable project decisions that should survive across branches and sessions.
 Use this file for choices that future agents and contributors should not need to
 re-derive from old PRs or chat logs.
 
+## 2026-11-15 — Model fidelity track runs between Milestone 1 and Milestone 2
+
+The owner accepted the recommendations for decisions D1 to D7 in
+[the work plan](work-plan.md). Milestone 1 is accepted as merged.
+
+- Add a straight-fin geometry option (Shah & London laminar Nu and f·Re by aspect
+  ratio, adiabatic-tip fin efficiency) without changing the existing geometry,
+  defaults or outputs. Nu uses the H1 boundary condition with an adiabatic cover,
+  the form checked against conjugate CFD in `thermal-design-loop`.
+- Then correct the circular-tube laminar constants on the existing rectangular
+  path as its own pull request. This moves the 70.9 °C default headline; the
+  hand-calculation tests are updated with independently derived values, not loosened.
+- Add temperature-dependent coolant properties, including 25% propylene glycol,
+  as fitted tables checked against CoolProp in tests. CoolProp is not a runtime
+  dependency.
+- Add a reference case at a realistic flow per kW alongside the current default,
+  which stays for continuity, and rerun the public chip benchmarks.
+- Compare with a measured plate after the benchmark rerun.
+
+Still owner calls, to be settled in the brief for the piece concerned: the flow
+per kW of the reference case, the cited source for glycol properties, and the
+wording of any applicability warning that is narrowed or removed.
+
 ## 2026-09-10 — Milestone 1 uses an explicit v2 screening-report contract
 
 The owner approved implementing one milestone at a time and the breaking report
