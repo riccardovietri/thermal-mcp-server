@@ -150,6 +150,10 @@ def analyze_coldplate(
     and low-Reynolds-number warnings. Temperature acceptance requires a caller's
     component-specific limit or the decision-report tool.
 
+    geometry accepts channel_model: "full_wetted_area" (default) or
+    "straight_fin", which requires fin_thickness_m and uses laminar
+    aspect-ratio correlations with fin efficiency (returned as fin_efficiency).
+
     Set sensitivity=True to include finite-difference partial derivatives and
     illustrative perturbations: ∂Tj/∂Q, ∂Tj/∂R_tim, ±20% R_jc variation,
     and Tj rise when R_tim is doubled. These are not measured uncertainty or lifetime estimates.
@@ -310,7 +314,8 @@ def analyze_rack_tool(
         coolant: Coolant type — "water" or "glycol50".
         r_jc_k_per_w: Junction-to-case thermal resistance per GPU in K/W.
         r_tim_k_per_w: TIM resistance per GPU in K/W.
-        geometry: Optional cold plate geometry overrides (same for all GPUs).
+        geometry: Optional cold plate geometry overrides (same for all GPUs),
+            including channel_model and, for "straight_fin", fin_thickness_m.
     """
     return analyze_rack_impl(
         gpu_count,
@@ -394,6 +399,7 @@ def generate_decision_report_tool(
     candidate does not prove architecture infeasibility. Unavailable results
     are null; system hydraulic feasibility and overall risk are not assessed.
     The model has not been validated against measured hardware.
+    model.applicability_notices follow geometry.channel_model.
 
     stress_scenarios accepts r_jc_variation_fraction, r_tim_multiplier,
     heat_load_delta_w, and supply_temp_delta_c. These are independent,

@@ -58,6 +58,10 @@ defaults and unknown keys are rejected. Keys: `channel_count`, `channel_width_m`
   `"straight_fin"`; supplying it with `"full_wetted_area"` is a validation error,
   returned in the `{ "error": [...] }` envelope.
 
+In a decision report, `model.applicability_notices` follows `channel_model`: with
+`"straight_fin"` the rectangular-channel correlation notice is replaced by the
+straight-fin assumptions notice. The other notices are unchanged.
+
 ```jsonc
 // straight-fin request
 {"heat_load_w": 1000.0, "flow_rate_lpm": 1.5, "coolant": "water",
