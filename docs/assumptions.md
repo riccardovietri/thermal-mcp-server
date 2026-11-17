@@ -20,9 +20,12 @@ conductivity.
 The model assumes uniform flow across channels and a single effective contact
 area. The convective resistance uses the full channel wetted perimeter times
 length as an effective heated area; this does not establish uniform wall heating,
-fin efficiency, or conjugate conduction. The rectangular-channel correlations
-are first-pass approximations and do not cover every aspect ratio, boundary
-condition, entrance length, or developing-flow state. See the
+fin efficiency, or conjugate conduction. Laminar Nu and f·Re are the Shah &
+London (1978) fully developed rectangular-duct values (H1 boundary condition,
+four walls heated) at the channel aspect ratio. These are still first-pass
+approximations: they do not cover entrance length, developing flow, or boundary
+conditions other than H1, and the transition blend and turbulent closures do
+not depend on aspect ratio. See the
 [F-Chart/EES rectangular-duct reference](https://fchart.com/ees/heat_transfer_library/internal_flow/hs1122.htm)
 for the kinds of factors that affect rectangular-channel correlations. The model
 also does not represent local maldistribution, detailed fin geometry, 2D

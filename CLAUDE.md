@@ -29,7 +29,9 @@ Public Python API: `analyze()`, `analyze_rack()`, and `optimize_flow()` in `phys
 **Does:**
 - Steady-state 1D resistance network: R_jc → R_tim → R_base → R_conv
 - Rectangular channel hydraulic diameter: Dh = 2wh/(w+h)
-- Dittus-Boelter Nu for turbulent, Nu=4.36 for laminar, linear blend 2300–4000
+- Dittus-Boelter Nu for turbulent; Shah & London rectangular-duct laminar Nu (H1)
+  and Darcy f·Re at the channel aspect ratio (3.610 and 56.92 for the square
+  default); linear blend 2300–4000
 - Darcy-Weisbach ΔP with Blasius friction, same transition blend
 - Pump power = ΔP × Q / 0.50 (50% efficiency assumption, documented inline)
 - Binary-search flow optimization
@@ -93,7 +95,8 @@ inlet_temp     = 25°C
 coolant        = water
 ```
 
-Default case (700W, 8 LPM, water, 25°C) → Tj ≈ 70.9°C, transitional regime.
+Default case (700W, 8 LPM, water, 25°C) → Tj ≈ 70.91°C (70.913238), ΔP ≈ 16.59 kPa,
+transitional regime.
 This number appears in README and is checked in `test_hand_calc_validation_default_case`.
 
 ## Coolant table
