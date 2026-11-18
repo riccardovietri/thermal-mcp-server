@@ -3,6 +3,9 @@
 Status: **accepted 2026-11-15**. Riccardo accepted the recommendation for each of D1 to D7 in the
 "Owner decisions" table; the durable record is in `docs/decisions.md`. Briefs live in `docs/briefs/`.
 
+Progress (2026-11-17): P1 merged (pull request 56), P2 merged (pull request 57), P4 in review on
+`feat/reference-case-benchmarks`, P3 deferred by the owner until after the demo, P5 not started.
+
 Sources: `docs/fable-handoff.md` (findings from `thermal-design-loop`), `docs/product-thesis-review.md`
 (Milestones 1 to 3), `docs/milestone-1-contract.md`.
 
@@ -36,6 +39,8 @@ where the table says so. Each piece ships its own figure (see "Figures").
 
 ### P1. Straight-fin geometry option (additive)
 
+Status: merged (pull request 56).
+
 - **Scope:** a geometry option with fin thickness, Shah & London laminar Nu (H1) and f·Re as functions
   of aspect ratio, adiabatic-tip fin efficiency. Ported from `thermal-design-loop/tools/screen_1d.py`.
   Existing geometry, defaults and outputs stay byte-for-byte unchanged.
@@ -51,6 +56,8 @@ where the table says so. Each piece ships its own figure (see "Figures").
 
 ### P2. Correct the laminar constants on the existing rectangular path
 
+Status: merged (pull request 57).
+
 - **Scope:** replace 4.36 and 64/Re with the aspect-ratio forms for the existing geometry. This changes
   the laminar end of the transition blend, so the 70.9 °C headline moves.
 - **Files:** `physics.py`, `docs/physics.md`, `README.md`, `CLAUDE.md` (key defaults), both hand-calc tests
@@ -60,6 +67,8 @@ where the table says so. Each piece ships its own figure (see "Figures").
 - **Owner approval:** required before work starts (D2). Blocked on P1.
 
 ### P3. Temperature-dependent coolant properties, including 25% propylene glycol
+
+Status: deferred by the owner until after the demo (2026-11-17).
 
 - **Scope:** ρ, cp, k, μ as functions of temperature for water, 50% ethylene glycol and 25% propylene
   glycol over a stated range; properties evaluated at mean coolant temperature; out-of-range inputs rejected
@@ -71,6 +80,11 @@ where the table says so. Each piece ships its own figure (see "Figures").
 - **Owner approval:** required (D4). Coolant values are on the ask-first list in `CLAUDE.md`.
 
 ### P4. Reference case and benchmark rerun
+
+Status: in review (brief `docs/briefs/p4-reference-case.md`). Run on P1 and P2 only, with fixed
+25 °C properties, because P3 is deferred. The reference flow is 1.5 LPM/kW and the reference plate is
+the straight-fin design; results in `docs/fidelity-results.md` from the new
+`examples/reference_case.py`, with `examples/real_chip_benchmarks.py` left unchanged.
 
 - **Scope:** add a reference operating point at a realistic flow per kW next to the current default,
   then rerun H100, B200 / GB200 NVL72, MI300X and Gaudi 3 with P1 to P3 and report what moved.
