@@ -18,7 +18,7 @@ predicts temperatures or pressure drops.
 
 ![Junction temperature, pressure drop and H100 resistance stack for five public chip cases on the default and a straight-fin plate](docs/img/chip_reference_case.png)
 
-**Reference case** ([results](docs/fidelity-results.md)): five public chip cases at 35 °C water
+**Reference case** ([results](docs/fidelity-results.md), [case study](docs/index.html)): five public chip cases at 35 °C water
 inlet, on the default plate at 8 LPM, the default plate at 1.5 LPM/kW, and a straight-fin plate at
 1.5 LPM/kW. At 1.5 LPM/kW the default plate is laminar and H100 reaches 107.4 °C; the straight-fin
 plate brings it to 87.3 °C at 0.71 kPa, still above the 83 °C limit because the generic package

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cold Plate Fidelity Study</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column, figures break out wider, key numbers in a ruled strip. */
+:root {
+  --bg: #f7f8fa; --surface: #ffffff; --fg: #16202b; --muted: #55636f; --rule: #d5dbe1;
+  --accent: #0b6fa4; --warn: #b4530a; --plot: #ffffff;
+  --display: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10161c; --surface: #18212a; --fg: #e6ecf1; --muted: #9aa8b4; --rule: #2c3944;
+    --accent: #5db7e6; --warn: #f0a35e; --plot: #f4f6f8; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10161c; --surface: #18212a; --fg: #e6ecf1; --muted: #9aa8b4; --rule: #2c3944;
+  --accent: #5db7e6; --warn: #f0a35e; --plot: #f4f6f8; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 400 17px/1.6 var(--body);
+  padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 44px; }
+section, header { display: flex; flex-direction: column; gap: 16px; }
+.col { max-width: 68ch; display: flex; flex-direction: column; gap: 14px; }
+p, ul, h1, h2, h3, figure, pre { margin: 0; }
+h1, h2 { font-family: var(--display); font-weight: 600; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); line-height: 1.1; }
+h2 { font-size: 1.45rem; line-height: 1.2; padding-top: 20px; border-top: 1px solid var(--rule); }
+.kicker { font: 500 0.78rem/1.3 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.15rem; color: var(--fg); }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+ul { padding-left: 1.2em; display: flex; flex-direction: column; gap: 8px; }
+code, pre { font-family: var(--mono); font-size: 0.88em; }
+pre { background: var(--surface); border: 1px solid var(--rule); padding: 14px 16px; overflow-x: auto; line-height: 1.5; }
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); border-block: 1px solid var(--rule); }
+.strip div { padding: 16px 16px 16px 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.strip b { font: 500 1.9rem/1.1 var(--mono); font-variant-numeric: tabular-nums; color: var(--accent); }
+.strip span { font-size: 0.92rem; color: var(--muted); }
+figure { display: flex; flex-direction: column; gap: 8px; }
+figure img { display: block; width: 100%; max-width: 100%; height: auto; background: var(--plot); border: 1px solid var(--rule); padding: 8px; }
+figcaption { font-size: 0.9rem; color: var(--muted); max-width: 68ch; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.93rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 8px 12px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; padding-left: 0; }
+th { font: 500 0.76rem/1.3 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+td.over { color: var(--warn); }
+.note { border-left: 3px solid var(--warn); padding: 4px 0 4px 14px; color: var(--fg); }
+footer { font-size: 0.9rem; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <p class="kicker">thermal-mcp-server · case study · November 2026</p>
+  <h1>Does a 1D cold-plate screening model hold up at realistic flow?</h1>
+  <div class="col">
+    <p class="lede">thermal-mcp-server is a Python screening engine for liquid-cooled GPU cold plates, with a thin MCP interface so an assistant can run it. Its headline result looked fine: 70.9 °C for a 700 W chip. That number depended on 8 LPM through one plate, about 11 LPM per kW. Loops are commonly sized near 1.5 LPM per kW.</p>
+    <p>I checked what the model says at that flow, found two errors in the convection model, fixed both with sourced correlations, and reran the public chip cases. This page is the result, including what is still unvalidated.</p>
+  </div>
+</header>
+
+<div class="strip" aria-label="Key results for H100 at 35 °C water inlet">
+  <div><b>107.4 °C</b><span>H100 on the default plate at 1.5 LPM/kW, against an 83 °C limit</span></div>
+  <div><b>87.3 °C</b><span>same chip and flow on a straight-fin plate, at 0.71 kPa</span></div>
+  <div><b>88.5%</b><span>share of that resistance stack that is package, not cold plate</span></div>
+</div>
+
+<section>
+  <h2>Two errors in the convection model</h2>
+  <div class="col">
+    <ul>
+      <li><strong>Circular-tube constants on rectangular channels.</strong> Laminar flow used Nu = 4.36 and f·Re = 64 at every aspect ratio. Those are round-tube values. Shah &amp; London (1978) give Nu 3.61 and f·Re 56.9 for a square duct, rising to Nu 6.49 and f·Re 82.3 at an aspect ratio of 1:8.</li>
+      <li><strong>No fin efficiency.</strong> The model treated the whole wetted perimeter as if it sat at base temperature. For 0.39 mm copper fins 3.75 mm tall in water, the efficiency is 0.75.</li>
+    </ul>
+    <p>The two errors partly cancel on a tall-fin plate, which is why neither was obvious from the output.</p>
+  </div>
+  <figure>
+    <img src="img/straight_fin_correlations.png" alt="Nusselt number and friction factor times Reynolds number against channel aspect ratio. The model curve passes through four Shah and London table points; the former tube constants are flat lines.">
+    <figcaption>Model curve against the Shah &amp; London table points, with the former tube constants as flat lines. Generated by <code>examples/make_figures.py</code>.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>What the fix did to the default plate</h2>
+  <div class="col">
+    <p>The headline barely moved, from 70.90 to 70.91 °C, because at 8 LPM the default plate sits most of the way toward turbulent flow. Laminar operating points are about 4.3 °C hotter and about 11% lower in pressure drop.</p>
+    <p class="note">The step near 5 LPM is the model's blend between laminar and turbulent correlations (Re 2300 to 4000). It was there before this work and it is not validated. Any result that lands in that band should be read with that in mind.</p>
+  </div>
+  <figure>
+    <img src="img/default_plate_tj_vs_flow.png" alt="Junction temperature and pressure drop against flow for the default plate at 700 W, former and corrected constants, with laminar, transition and turbulent bands shaded and the 8 LPM default marked.">
+    <figcaption>Default plate, 700 W, water at 25 °C inlet. Dashed: former constants. Solid: corrected.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>Reference case: five public chip cases at 1.5 LPM/kW</h2>
+  <div class="col">
+    <p>Water at 35 °C inlet, generic package resistances (R_jc 0.04 K/W, R_tim 0.02 K/W), three configurations per chip:</p>
+    <ul>
+      <li><strong>A:</strong> default plate (40 channels, 1 × 1 × 80 mm) at 8 LPM.</li>
+      <li><strong>B:</strong> default plate at 1.5 LPM per kW.</li>
+      <li><strong>C:</strong> straight-fin plate (76 channels, 0.39 mm wide, 3.75 mm tall, 60 mm long) at 1.5 LPM per kW.</li>
+    </ul>
+  </div>
+  <figure>
+    <img src="img/chip_reference_case.png" alt="Three panels: junction temperature per chip for configurations A, B and C with each chip limit marked; pressure drop per chip on a log axis; and the H100 resistance stack for the three configurations.">
+    <figcaption>Junction temperature, pressure drop and the H100 resistance stack. Generated by <code>examples/reference_case.py</code> and <code>examples/make_figures.py</code>.</figcaption>
+  </figure>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>H100 SXM, limit 83 °C</th><th>Flow (LPM)</th><th>Tj (°C)</th><th>Margin (°C)</th><th>ΔP (kPa)</th><th>Convection (mK/W)</th><th>Regime</th></tr></thead>
+      <tbody>
+        <tr><td>A: default plate, 8 LPM</td><td>8.00</td><td>80.9</td><td>2.1</td><td>16.59</td><td>4.171</td><td>transitional</td></tr>
+        <tr><td>B: default plate, 1.5 LPM/kW</td><td>1.05</td><td class="over">107.4</td><td class="over">−24.4</td><td>0.89</td><td>36.067</td><td>laminar</td></tr>
+        <tr><td>C: straight-fin, 1.5 LPM/kW</td><td>1.05</td><td class="over">87.3</td><td class="over">−4.3</td><td>0.71</td><td>6.374</td><td>laminar</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="col">
+    <ul>
+      <li><strong>Realistic flow breaks the default plate.</strong> At 1.5 LPM/kW it is laminar, its convection resistance is 36.1 mK/W against 4.2 at 8 LPM, and every chip is 24 °C or more over its limit.</li>
+      <li><strong>The straight-fin plate recovers most of that.</strong> H100 comes down to 87.3 °C at 0.71 kPa. Configuration A needs 7.6 times the flow and 16.59 kPa to reach 80.9 °C.</li>
+      <li><strong>No chip passes at this flow and inlet temperature, and the plate is not why.</strong> R_jc + R_tim is 60 of 67.8 mK/W in configuration C. The cold plate is the small term.</li>
+      <li><strong>The 1200 W cases cannot pass on any plate with these package values.</strong> 1200 W through 60 mK/W is a 72 K rise before the plate or coolant adds anything. That says the generic resistances do not describe those parts. It does not say the parts cannot be cooled.</li>
+      <li><strong>The default plate only meets H100's limit by entering the transition blend.</strong> Its minimum flow is 6.61 LPM, in the unvalidated band. The straight-fin plate meets the limit at 9.77 LPM while still laminar.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>How the numbers were checked</h2>
+  <div class="col">
+    <ul>
+      <li><strong>Against the source table.</strong> Nu and f·Re reproduce four Shah &amp; London table points within 0.5%.</li>
+      <li><strong>Against a CFD-checked reference.</strong> The straight-fin path reproduces the 1D screen from my companion thermal-design-loop study to 1e-6 relative on eight quantities for two coolants. That screen agrees with conjugate CFD to 1.0% on average for thermal resistance.</li>
+      <li><strong>By hand calculation.</strong> Each physics change ships with a test that derives every intermediate value from the definitions, with the expected numbers written as literals.</li>
+      <li><strong>Independently.</strong> Expected values were fixed in a written brief before implementation, then re-derived by a separate standalone script that does not import the package. All matched.</li>
+      <li><strong>In CI.</strong> 128 tests, lint, type checks and the notebook run on every pull request. Every figure and every number on this page comes from a script in the repo.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>What is still not validated</h2>
+  <div class="col">
+    <ul>
+      <li><strong>No measured plate.</strong> Equation checks are not hardware validation. A comparison with a published skived-plate measurement is the next piece of work.</li>
+      <li><strong>Generic package resistances.</strong> The same R_jc and R_tim are used for every chip. They are not vendor values, and they dominate the result.</li>
+      <li><strong>Fixed coolant properties.</strong> Results at 35 °C inlet use 25 °C water properties. Temperature-dependent properties and 25% propylene glycol are planned.</li>
+      <li><strong>The transition blend.</strong> A linear interpolation between Re 2300 and 4000, not a transition model.</li>
+      <li><strong>Scope.</strong> Steady state, single phase, no manifold losses, no flow maldistribution, no spreading resistance.</li>
+    </ul>
+    <p>The model reports these limits itself. Every result carries warnings and applicability notices that name which of them apply to that operating point.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Reproduce it</h2>
+  <pre>git clone https://github.com/riccardovietri/thermal-mcp-server
+cd thermal-mcp-server
+uv sync --group dev
+uv run python examples/reference_case.py
+uv run python examples/make_figures.py --out docs/img
+uv run pytest</pre>
+  <div class="col">
+    <p>Full tables are in <a href="https://github.com/riccardovietri/thermal-mcp-server/blob/main/docs/fidelity-results.md">fidelity-results.md</a>, the equations in <a href="https://github.com/riccardovietri/thermal-mcp-server/blob/main/docs/physics.md">physics.md</a>, and the plan with its gates in <a href="https://github.com/riccardovietri/thermal-mcp-server/blob/main/docs/work-plan.md">work-plan.md</a>.</p>
+  </div>
+</section>
+
+<footer>Riccardo Vietri · <a href="https://github.com/riccardovietri/thermal-mcp-server">github.com/riccardovietri/thermal-mcp-server</a> · Screening estimates from a 1D model, not measured results.</footer>
+
+</main>
+</body>
+</html>
