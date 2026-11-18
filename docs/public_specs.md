@@ -19,6 +19,15 @@ source categories without treating every value as equally certain.
 - B200-style cold-plate geometry and package resistance are engineering
   estimates used to demonstrate sensitivity and sizing behavior.
 
+## Reference Flow
+
+`examples/reference_case.py` evaluates every chip at a reference flow of
+1.5 LPM per kW of TDP (owner decision, 2026-11-17), next to the historical
+8 LPM default. 1.5 LPM/kW is a scenario input representative of how loops are
+commonly sized, not a vendor specification. The straight-fin plate used there
+is the screened design from the companion `thermal-design-loop` study, not a
+vendor geometry. Results are in [`fidelity-results.md`](fidelity-results.md).
+
 ## How To Read The Examples
 
 Values labeled `published` are taken from public vendor-facing materials.
