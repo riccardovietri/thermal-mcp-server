@@ -71,7 +71,8 @@ def reference_case() -> dict[str, Any]:
 
     ``points``: one dict per chip and configuration (A, B, C) with junction
     temperature, margin to the chip limit, pressure drop, pump power, Reynolds
-    number, regime and the resistance stack in K/W.
+    number, regime, the resistance stack in K/W and the fin efficiency
+    (``None`` on the default plate).
 
     ``min_flow``: one dict per chip and plate with the minimum passing flow and
     the pressure drop there, or ``None`` for both when no point in the search
@@ -105,6 +106,7 @@ def reference_case() -> dict[str, Any]:
                     "reynolds": result.reynolds,
                     "regime": result.regime,
                     "resistances_k_per_w": dict(result.resistances_k_per_w),
+                    "fin_efficiency": result.fin_efficiency,
                 }
             )
         for plate, geometry in PLATES.items():
@@ -158,10 +160,19 @@ def main() -> None:
             print(f"  {m['chip']:<22} {m['plate']:<10} {m['min_flow_lpm']:>14.3f} {m['dp_kpa']:>9.2f}  {m['regime']:<12}")
     print(rule)
     print()
-    print("Convection resistance (mK/W):")
+    print(f"{ALL_CHIPS[0].name} resistance stack (mK/W); package share = (R_jc + R_tim) / total")
+    print(rule)
+    print(f"  {'Cfg':>3} {'R_jc':>7} {'R_tim':>7} {'base':>7} {'convection':>11} {'total':>8} {'package':>8} {'fin eff.':>9}")
+    print(rule)
     for p in data["points"]:
         if p["chip"] == ALL_CHIPS[0].name:
-            print(f"  {p['config']}: {p['resistances_k_per_w']['convection'] * 1000:.3f}  ({p['plate']} plate, {p['flow_lpm']:.2f} LPM, {p['regime']})")
+            r = {k: v * 1000.0 for k, v in p["resistances_k_per_w"].items()}
+            eta = "-" if p["fin_efficiency"] is None else f"{p['fin_efficiency']:.3f}"
+            print(
+                f"  {p['config']:>3} {r['junction_to_case']:>7.3f} {r['tim']:>7.3f} {r['base_conduction']:>7.3f} "
+                f"{r['convection']:>11.3f} {r['total']:>8.3f} {(r['junction_to_case'] + r['tim']) / r['total']:>8.1%} {eta:>9}"
+            )
+    print(rule)
 
 
 if __name__ == "__main__":
