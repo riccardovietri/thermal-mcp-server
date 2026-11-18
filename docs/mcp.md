@@ -21,10 +21,10 @@ Example request / response (canonical 700 W / 8 LPM water default case):
   "coolant": "water",
   "regime": "transitional",
   "reynolds": 3734.08,
-  "junction_temp_c": 70.90,
-  "pressure_drop_pa": 16800.35,
-  "pump_power_w": 4.48,
-  "resistances_k_per_w": {"junction_to_case": 0.04, "tim": 0.02, "base_conduction": 0.00052, "convection": 0.00416, "total": 0.06467}
+  "junction_temp_c": 70.91,
+  "pressure_drop_pa": 16586.94,
+  "pump_power_w": 4.42,
+  "resistances_k_per_w": {"junction_to_case": 0.04, "tim": 0.02, "base_conduction": 0.00052, "convection": 0.00417, "total": 0.06469}
 }
 ```
 

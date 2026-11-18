@@ -9,7 +9,7 @@ enough detail to defend the calculation in a technical conversation.
 > interface, built for engineers making early decisions about liquid-cooled AI
 > hardware. I used it to evaluate an illustrative eight-GPU parallel rack at
 > 700 W per GPU, with 25°C water and 8 LPM per GPU. The model predicted a 70.9°C
-> maximum junction temperature, 26.3°C rack return temperature, and 16.8 kPa of
+> maximum junction temperature, 26.3°C rack return temperature, and 16.6 kPa of
 > cold-plate pressure drop. That passed an 83°C limit with a 5°C guardband in the
 > model, but I concluded that full system hydraulic feasibility was still unknown
 > because manifolds, fittings, and the pump curve were outside the model.
@@ -28,17 +28,17 @@ receive the assumptions, intermediate results, status, and limitations together.
 > pressure drop and an illustrative pumping-power requirement.
 >
 > The run I keep coming back to is an eight-GPU parallel case with 700 W per GPU,
-> 8 LPM of water per GPU, and a 25°C inlet. The model predicted a 70.90°C maximum
-> junction temperature against an 83°C limit: 12.10°C of hard-limit margin, or
-> 7.10°C after a caller-selected 5°C guardband. The coolant warms 1.26°C through
+> 8 LPM of water per GPU, and a 25°C inlet. The model predicted a 70.91°C maximum
+> junction temperature against an 83°C limit: 12.09°C of hard-limit margin, or
+> 7.09°C after a caller-selected 5°C guardband. The coolant warms 1.26°C through
 > each branch, and half of that rise contributes 0.63°C to the junction estimate.
-> The resistance breakdown was more useful than the final temperature: 61.85%
-> junction-to-case, 30.92% TIM, 6.43% convection, and 0.80% base conduction.
+> The resistance breakdown was more useful than the final temperature: 61.83%
+> junction-to-case, 30.92% TIM, 6.45% convection, and 0.80% base conduction.
 >
 > That changes the next engineering action. Doubling flow from 8 to 16 LPM lowers
-> modeled junction temperature by only 1.70°C, while cold-plate pressure rises
-> from 16.80 to 60.33 kPa and per-plate pumping power rises from 4.48 to 32.17 W,
-> a 7.18× increase. Halving the assumed TIM resistance from 0.02 to 0.01 K/W
+> modeled junction temperature by only 1.71°C, while cold-plate pressure rises
+> from 16.59 to 60.33 kPa and per-plate pumping power rises from 4.42 to 32.17 W,
+> a 7.27× increase. Halving the assumed TIM resistance from 0.02 to 0.01 K/W
 > lowers junction temperature by 7.00°C. I would first validate the package and
 > TIM resistance assumptions and investigate the interface before paying the
 > hydraulic cost of more flow. The model identifies that priority; it does not
@@ -81,12 +81,12 @@ The relevant schema-v2 report results are:
 | Result | Value | Meaning |
 |---|---:|---|
 | Status | `meets_target` | The evaluated point meets the guarded thermal criterion in this model. |
-| Maximum junction temperature | 70.90°C | All ideal parallel branches have the same predicted temperature. |
-| Margin to 83°C limit | 12.10°C | `83 − 70.90`. |
-| Margin to guarded criterion | 7.10°C | `(83 − 5) − 70.90`; this determines the status. |
+| Maximum junction temperature | 70.91°C | All ideal parallel branches have the same predicted temperature. |
+| Margin to 83°C limit | 12.09°C | `83 − 70.91`. |
+| Margin to guarded criterion | 7.09°C | `(83 − 5) − 70.91`; this determines the status. |
 | Rack return temperature | 26.26°C | Eight 700 W loads add 5.6 kW to the 64 LPM stream. |
-| Cold-plate-only pressure drop | 16.80 kPa | One ideal parallel branch; manifold and system losses are excluded. |
-| Illustrative pumping estimate | 35.84 W | Uses total rack flow and a fixed 50% efficiency, not a pump curve. |
+| Cold-plate-only pressure drop | 16.59 kPa | One ideal parallel branch; manifold and system losses are excluded. |
+| Illustrative pumping estimate | 35.39 W | Uses total rack flow and a fixed 50% efficiency, not a pump curve. |
 | System hydraulic feasibility | `not_assessed` | Available head and non-plate losses were not supplied. |
 | Hardware validation state | `unvalidated` | Equations are checked; this case is not calibrated to measured hardware. |
 
@@ -102,13 +102,13 @@ These are computed model outputs, not measured hardware data:
 
 | Case | Junction temperature | Cold-plate ΔP | Per-plate pump estimate | Change from baseline |
 |---|---:|---:|---:|---|
-| Baseline: 8 LPM, `R_tim=0.02 K/W` | 70.90°C | 16.80 kPa | 4.48 W | — |
-| Double flow: 16 LPM | 69.20°C | 60.33 kPa | 32.17 W | −1.70°C; 7.18× pump estimate |
-| Half TIM resistance: 8 LPM, `R_tim=0.01 K/W` | 63.90°C | 16.80 kPa | 4.48 W | −7.00°C; unchanged hydraulics |
+| Baseline: 8 LPM, `R_tim=0.02 K/W` | 70.91°C | 16.59 kPa | 4.42 W | — |
+| Double flow: 16 LPM | 69.20°C | 60.33 kPa | 32.17 W | −1.71°C; 7.27× pump estimate |
+| Half TIM resistance: 8 LPM, `R_tim=0.01 K/W` | 63.91°C | 16.59 kPa | 4.42 W | −7.00°C; unchanged hydraulics |
 
 The flow comparison crosses from the implementation's transitional treatment at
 8 LPM (`Re=3734`) into its turbulent treatment at 16 LPM (`Re=7468`). Therefore,
-the 7.18× pumping ratio is the result of this model at these two points, not a
+the 7.27× pumping ratio is the result of this model at these two points, not a
 universal cubic scaling law. A real system operating point still requires the
 complete loss curve and pump curve.
 
@@ -141,7 +141,8 @@ This point lies in the model's transitional range, `2300 ≤ Re ≤ 4000`.
 
 ### 2. Estimate convection
 
-The implementation uses `Nu=4.36` for its laminar endpoint and evaluates
+The implementation uses the Shah & London rectangular-duct laminar value for
+the square channel, `Nu=3.610`, as its laminar endpoint and evaluates
 Dittus–Boelter at the upper transition endpoint, `Re=4000`:
 
 ```text
@@ -152,8 +153,8 @@ h = Nu * k / Dh
 At this point it linearly blends between the endpoint values, giving:
 
 ```text
-Nu = 31.33
-h = 18,801 W/(m²·K)
+Nu = 31.22
+h = 18,730 W/(m²·K)
 ```
 
 That linear blend is a numerical choice that keeps an optimization continuous.
@@ -167,11 +168,11 @@ to the coolant:
 ```text
 R_base = t_base / (k_copper * A_contact) = 0.000519 K/W
 A_wetted = n * 2(w + h) * L = 0.0128 m²
-R_conv = 1 / (h * A_wetted) = 0.004155 K/W
+R_conv = 1 / (h * A_wetted) = 0.004171 K/W
 
 R_total = R_jc + R_tim + R_base + R_conv
-        = 0.04 + 0.02 + 0.000519 + 0.004155
-        = 0.064675 K/W
+        = 0.04 + 0.02 + 0.000519 + 0.004171
+        = 0.064691 K/W
 ```
 
 Here `R_jc=0.04 K/W` and `R_tim=0.02 K/W` are scenario assumptions. Together
@@ -193,8 +194,8 @@ inlet plus half the bulk rise:
 
 ```text
 T_junction = T_inlet + 0.5 * deltaT_coolant + Q_dot * R_total
-           = 25 + 0.62988 + 700 * 0.064675
-           = 70.90°C
+           = 25 + 0.62988 + 700 * 0.064691
+           = 70.91°C
 ```
 
 For eight ideal parallel branches, total flow and heat are both multiplied by
@@ -208,16 +209,17 @@ The hydraulic calculation uses Darcy–Weisbach:
 deltaP = f * (L / Dh) * (rho * v² / 2)
 ```
 
-The implementation linearly blends its laminar and Blasius turbulent friction
-endpoints at this Reynolds number, giving `f=0.03791` and:
+The implementation linearly blends its laminar (`56.92/2300`, Shah & London
+square duct) and Blasius turbulent friction endpoints at this Reynolds number,
+giving `f=0.03743` and:
 
 ```text
-deltaP = 16,800 Pa = 16.80 kPa
+deltaP = 16,587 Pa = 16.59 kPa
 ```
 
 Parallel branches see the same modeled branch pressure drop. The estimate omits
 manifolds, headers, bends, fittings, valves, entrance/exit effects, roughness,
-and flow maldistribution. The 35.84 W pumping number is simply
+and flow maldistribution. The 35.39 W pumping number is simply
 `deltaP * V_dot_total / 0.50`; it does not locate a real pump-system operating
 point.
 
@@ -231,7 +233,7 @@ recognize the underlying method:
 - Dittus–Boelter and Blasius are empirical closures. Their applicability depends
   on Reynolds number, geometry, roughness, boundary condition, and development
   length.
-- `Nu=4.36`, the effective wetted area, the half-bulk-temperature approximation,
+- Fully developed laminar rectangular-duct `Nu` and `f·Re`, the effective wetted area, the half-bulk-temperature approximation,
   fixed 25°C properties, and the transitional blend are declared model choices.
 - Package/TIM resistances, geometry, temperature limit, and pump efficiency are
   device or scenario inputs; defaults are not vendor measurements.

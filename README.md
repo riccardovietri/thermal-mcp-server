@@ -57,7 +57,7 @@ Single H100 SXM cold plate
   Inlet temp:       25.0 deg C
   Junction temp:    70.9 deg C
   Margin to 83 C:   12.1 deg C
-  Pressure drop:    16.8 kPa
+  Pressure drop:    16.6 kPa
   Flow regime:      transitional
 
 8-GPU rack, parallel topology
@@ -65,7 +65,7 @@ Single H100 SXM cold plate
   Total CDU flow:   64.0 LPM
   Max junction:     70.9 deg C
   CDU return temp:  26.3 deg C
-  Cold-plate dP:    16.8 kPa
+  Cold-plate dP:    16.6 kPa
 ```
 
 For a series-vs-parallel rack comparison:
@@ -136,9 +136,11 @@ R_total = R_jc + R_tim + R_base + R_conv
 coolant_rise = Q / (m_dot * cp)
 ```
 
-Heat transfer uses Dittus-Boelter for turbulent flow, Nu = 4.36 for laminar
-flow, and a linear blend in transition. Pressure drop uses Darcy-Weisbach with
-the same regime split.
+Heat transfer uses Dittus-Boelter for turbulent flow, the Shah & London
+rectangular-duct laminar Nu at the channel aspect ratio (3.61 for the default
+square channel), and a linear blend in transition. Pressure drop uses
+Darcy-Weisbach with the same regime split (laminar Darcy f·Re = 56.92 for a
+square channel, Blasius when turbulent).
 
 Read the concise model notes in [`docs/model_overview.md`](docs/model_overview.md)
 and [`docs/assumptions.md`](docs/assumptions.md). The detailed derivation and

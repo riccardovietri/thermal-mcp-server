@@ -50,9 +50,9 @@ defaults. The implemented response includes this excerpt:
     "role": "fixed_input",
     "flow_lpm_per_gpu": 8.0,
     "supply_temp_c": 25.0,
-    "junction_temp_c": 70.90,
-    "margin_to_limit_c": 12.10,
-    "margin_to_criterion_c": 7.10,
+    "junction_temp_c": 70.91,
+    "margin_to_limit_c": 12.09,
+    "margin_to_criterion_c": 7.09,
     "meets_thermal_target": true
   },
   "flow_search": null,

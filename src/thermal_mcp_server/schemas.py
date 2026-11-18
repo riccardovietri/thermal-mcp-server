@@ -21,11 +21,11 @@ class Geometry(BaseModel):
     80 mm long, 2 mm base, 100 cm² contact area.
 
     ``channel_model`` selects the convection model. ``"full_wetted_area"`` (the
-    default) is the original model: constant laminar Nu = 4.36 and f·Re = 64 with
-    the full channel perimeter as heated area. ``"straight_fin"`` treats the walls
-    between channels as straight rectangular fins of thickness ``fin_thickness_m``
-    (channel height = fin height), with aspect-ratio-dependent laminar Nu (H1) and
-    f·Re and adiabatic-tip fin efficiency; fins use ``copper_k_w_mk``. See
+    default) takes the full channel perimeter as heated area with no fin
+    efficiency. ``"straight_fin"`` treats the walls between channels as straight
+    rectangular fins of thickness ``fin_thickness_m`` (channel height = fin
+    height), with adiabatic-tip fin efficiency; fins use ``copper_k_w_mk``. Both
+    use the aspect-ratio-dependent laminar Nu (H1) and f·Re of Shah & London. See
     docs/physics.md Section I. ``fin_thickness_m`` is required for
     ``"straight_fin"`` and rejected for ``"full_wetted_area"``.
     """

@@ -286,11 +286,11 @@ def test_rendered_memo_uses_engineering_display_precision():
     report = generate_decision_report(_scenario())
     memo = report.rendered_memo
 
-    assert "**Flow:** 5.499 LPM/GPU" in memo
+    assert "**Flow:** 5.568 LPM/GPU" in memo
     assert "**Junction temperature:** 78.00°C" in memo
     assert "**Margin to criterion:** 0.00°C" in memo
     assert "structured fields retain calculation precision" in memo
-    assert "5.499036" not in memo
+    assert "5.568167" not in memo
 
 
 def test_report_is_deterministic():

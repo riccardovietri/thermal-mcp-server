@@ -22,7 +22,10 @@ equations. The model does not solve heat transfer from coolant to room air.
 - Prandtl number:
   - `Pr = cp * mu / k`
 - Nusselt number:
-  - Laminar (`Re < 2300`): `Nu = 4.36` (fully developed, constant heat flux)
+  - Laminar (`Re < 2300`): `Nu = Nu_H1(alpha)`, the Shah & London fully developed
+    rectangular-duct value (H1 boundary condition, four walls heated) at
+    `alpha = min(w, h) / max(w, h)`; polynomial in Section I. `Nu = 3.610` for the
+    default square channel (`alpha = 1`).
   - Turbulent (`Re > 4000`): `Nu = 0.023 * Re^0.8 * Pr^0.4` (Dittus–Boelter)
   - Transitional: linear blend between laminar and turbulent endpoints for numerical continuity during optimization; this blend is not an experimentally validated transition correlation.
 - Convection coefficient:
@@ -39,16 +42,36 @@ equations. The model does not solve heat transfer from coolant to room air.
   - `Tj = Tin + 0.5*deltaT_coolant + Q*R_total`
 - Pressure drop (Darcy–Weisbach):
   - `deltaP = f * (L/Dh) * (rho * v^2 / 2)`
-  - Laminar `f = 64/Re`, turbulent `f = 0.3164*Re^-0.25` (Blasius smooth-pipe)
+  - Laminar `f = (f Re)_Darcy(alpha) / Re` (Shah & London, Section I;
+    `(f Re)_Darcy = 56.92` for `alpha = 1`), turbulent `f = 0.3164*Re^-0.25`
+    (Blasius smooth-pipe)
 
 ## C) Correlations and regime logic
 - Reynolds number determines regime:
   - `<2300`: laminar
   - `2300-4000`: transitional (explicit blend for numerical smoothness)
   - `>4000`: turbulent
-- Both Nusselt number and friction factor are linearly blended in the transition regime (Re 2300–4000) to avoid discontinuities. The friction factor blends between the laminar value at Re=2300 (`64/2300 ≈ 0.0278`) and the Blasius turbulent value at Re=4000 (`0.3164 × 4000^−0.25 ≈ 0.0398`), matching the Nusselt number treatment. The blend provides numerical continuity only; it is not evidence that transition behavior is accurate for the specified channel.
-- The laminar constant `Nu=4.36` and turbulent Dittus–Boelter expression are first-pass approximations. They do not by themselves establish accuracy for arbitrary rectangular channels, aspect ratios, heating boundaries, entrance lengths, or developing flow. The [F-Chart/EES rectangular-duct reference](https://fchart.com/ees/heat_transfer_library/internal_flow/hs1122.htm) illustrates why those factors affect rectangular-channel correlations. The current implementation does not model those corrections or enforce a correlation-specific validity range.
+- Both Nusselt number and friction factor are linearly blended in the transition regime (Re 2300–4000) to avoid discontinuities. The friction factor blends between the laminar value at Re=2300 (`(f Re)_Darcy(alpha) / 2300`, `56.9184 / 2300 ≈ 0.0247` for the default square channel) and the Blasius turbulent value at Re=4000 (`0.3164 × 4000^−0.25 ≈ 0.0398`), matching the Nusselt number treatment; the Nusselt number blends from `Nu_H1(alpha)` to Dittus–Boelter at Re=4000. The blend provides numerical continuity only; it is not evidence that transition behavior is accurate for the specified channel.
+- The laminar rectangular-duct values and turbulent Dittus–Boelter expression are first-pass approximations. They do not by themselves establish accuracy for arbitrary rectangular channels, heating boundaries other than H1, entrance lengths, or developing flow, and the transition blend and turbulent closures do not depend on aspect ratio. The [F-Chart/EES rectangular-duct reference](https://fchart.com/ees/heat_transfer_library/internal_flow/hs1122.htm) illustrates why those factors affect rectangular-channel correlations. The current implementation does not model those corrections or enforce a correlation-specific validity range.
 - The official [EES rectangular-duct documentation](https://fchart.com/ees/heat_transfer_library/internal_flow/hs1120.htm) requires aspect ratio, length/hydraulic-diameter ratio, relative roughness, wall boundary condition, and developing-flow treatment. Its [laminar duct documentation](https://fchart.com/ees/heat_transfer_library/internal_flow/hs1122.htm) expects `Re < 2300` and bulk-average properties. The [turbulent pipe documentation](https://fchart.com/ees/heat_transfer_library/internal_flow/hs1022.htm) likewise includes length/diameter, roughness, and developing-flow effects. These pages provide validity context for the named closures; they do not validate this implementation for arbitrary cold-plate geometry, roughness, entrance effects, or manifolds.
+- Change note (2026-11-17): until this change the `full_wetted_area` path used the
+  circular-tube constants `Nu = 4.36` and Darcy `f·Re = 64` for every channel shape.
+  Those are the fully developed values for a round tube under uniform heat flux,
+  not for a rectangular duct. The path now uses the Shah & London (1978)
+  rectangular-duct forms already used by the straight-fin model (Section I, same
+  source note), evaluated at the channel aspect ratio. The H1 four-wall form
+  matches a path that heats the full wetted perimeter. Nothing else about the path
+  changed: full wetted perimeter as heated area, no fin efficiency, the
+  2300–4000 blend, Dittus–Boelter and Blasius above it. For the default square
+  channel, laminar `Nu` falls from 4.36 to 3.610 and laminar `f·Re` from 64 to
+  56.92, so laminar junction temperatures rise (700 W, 4 LPM: 89.53 → 93.87 °C)
+  and laminar pressure drops fall (3.797 → 3.377 kPa); the default 8 LPM
+  transitional case moves from 70.902 to 70.913 °C and 16.800 to 16.587 kPa;
+  fully turbulent points do not move. The figure below compares the two.
+
+  ![Default plate Tj and ΔP against flow, old and corrected laminar constants](img/default_plate_tj_vs_flow.png)
+
+  *Generated by `examples/make_figures.py`.*
 - Pump power is computed as `ΔP × Q / η` with η = 0.50. This is a fixed illustrative assumption, not a pump curve or system operating-point calculation.
 
 ## D) Parameters and defaults
@@ -85,6 +108,10 @@ treated as a scenario with unquantified property error.
   effective heated-area assumption, not a claim that every wetted wall is heated
   uniformly. Fin efficiency, conjugate conduction, entrance effects, and the
   actual heat-source footprint are not modeled.
+- Laminar `Nu` and `f·Re` are fully developed rectangular-duct values for the H1
+  boundary condition (all four walls heated). Developing flow, other heating
+  boundaries (for example one heated wall), and aspect-ratio effects on the
+  transition and turbulent closures are not modeled.
 - Geometry fields are algebraically valid inputs, not a guarantee that a physical
   cold plate can be manufactured or that the selected correlation applies.
 - An optional `straight_fin` channel model with aspect-ratio laminar correlations
@@ -97,7 +124,7 @@ signoff, local hotspot prediction, complete CDU sizing, or any result that
 depends materially on the omitted effects above.
 
 ## F) Engineering Notes
-This model uses Dittus-Boelter for turbulent forced convection and a constant fully developed laminar Nusselt number for low-Re flow. These are reduced-order approximations selected for a transparent first-pass model; their use here is not a validation claim for arbitrary rectangular cold plates. Transitional flow is blended linearly to avoid discontinuities in optimization.
+This model uses Dittus-Boelter for turbulent forced convection and the fully developed laminar rectangular-duct Nusselt number at the channel aspect ratio for low-Re flow. These are reduced-order approximations selected for a transparent first-pass model; their use here is not a validation claim for arbitrary rectangular cold plates. Transitional flow is blended linearly to avoid discontinuities in optimization.
 
 Failure modes not captured: flow maldistribution across channels, 2D/3D spreading resistance in package and base, contact-resistance scatter, TIM pump-out/aging, manifold/header losses, air ingestion, boiling inception, and transient warm-up behavior.
 
@@ -274,7 +301,9 @@ zero engineering margin is safe.
 
 Selected with `geometry.channel_model = "straight_fin"` and a required
 `geometry.fin_thickness_m`. The default, `"full_wetted_area"`, is the model in
-Sections B, C and E, unchanged. Added 2026-11-15.
+Sections B, C and E. Added 2026-11-15. Since 2026-11-17 the `full_wetted_area`
+path uses the same laminar correlations below (Section C change note); the two
+models now differ only in the heated area and fin efficiency.
 
 ### Geometry
 
@@ -334,7 +363,8 @@ tips is assumed to carry no heat. As `k_s → ∞`, `eta → 1` and
 `R_conv → 1 / (N L h (w + 2H))`. `fin_efficiency` is reported in the output.
 
 The `full_wetted_area` model, by contrast, uses `R_conv = 1 / (h · N · 2(w + H) · L)`
-with `Nu = 4.36`: all four walls at full effectiveness, including the cover.
+with the same `Nu_lam(alpha)`: all four walls at full effectiveness, including the
+cover.
 
 ### Pressure drop
 

@@ -38,10 +38,12 @@ def test_pressure_drop_superlinear_vs_flow():
 @pytest.mark.parametrize(
     ("flow_lpm", "expected_re", "expected_dp_pa", "expected_regime"),
     [
-        # Independent Darcy-Weisbach calculation with f = 64 / Re.
-        (1.0, 466.760300, 949.333, "laminar"),
+        # Independent Darcy-Weisbach calculation with f = (f·Re)_Darcy(1) / Re,
+        # Shah & London square duct: (f·Re)_Darcy(1) = 56.9184.
+        (1.0, 466.760300, 844.2896, "laminar"),
         # Independent calculation using the documented linear transition blend.
-        (8.0, 3734.082397, 16800.347, "transitional"),
+        # Laminar end f = 56.9184 / 2300; blend = 0.843577881, f = 0.0374329080.
+        (8.0, 3734.082397, 16586.937, "transitional"),
         # Independent Darcy-Weisbach calculation with Blasius friction.
         (10.0, 4667.602996, 26503.038, "turbulent"),
     ],
@@ -68,8 +70,8 @@ def test_darcy_weisbach_absolute_values_across_regimes(
 @pytest.mark.parametrize(
     ("flow_lpm", "expected_re", "expected_dp_pa"),
     [
-        # Re = 2300 and f = 64 / 2300 at the lower transition endpoint.
-        (4.927582748244734, 2300.0, 4677.918556),
+        # Re = 2300 and f = 56.9184 / 2300 (Shah & London, alpha = 1) at the lower endpoint.
+        (4.927582748244734, 2300.0, 4160.306867),
         # Re = 4000 and f = 0.3164 * Re**-0.25 at the upper endpoint.
         (8.569709127382145, 4000.0, 20229.553904),
     ],
@@ -114,9 +116,9 @@ def test_darcy_weisbach_glycol_uses_declared_properties():
     result = analyze(AnalyzeColdplateInput(flow_rate_lpm=8.0, coolant="glycol50"))
 
     # rho=1060 kg/m³, mu=0.0048 Pa·s, v=3.333333 m/s, Dh=0.001 m.
-    # Re=736.111111, f=64/Re=0.086943396, ΔP=40960 Pa.
+    # Re=736.111111, f=56.9184/Re=0.077323109, ΔP=36427.776 Pa.
     assert result.reynolds == pytest.approx(736.111111, abs=1e-3)
-    assert result.pressure_drop_pa == pytest.approx(40960.0, abs=0.01)
+    assert result.pressure_drop_pa == pytest.approx(36427.776, abs=0.01)
     assert result.regime == "laminar"
 
 
@@ -261,10 +263,43 @@ def test_hand_calc_validation_700w_water():
 def test_hand_calc_validation_default_case():
     """Validate default case: 700W, 8 LPM, water, default R values.
 
-    This is the 'typical GPU' case with R_jc=0.04, R_tim=0.02.
-    Hand calc gives Tj ~ 70.9 C (within expected 65-85 C range).
+    This is the 'typical GPU' case with R_jc=0.04, R_tim=0.02, default square
+    1 mm × 1 mm channels (alpha = 1).
+
+    Hand calculation (independent of model code):
+      Dh     = 2 × 0.001 × 0.001 / (0.001 + 0.001) = 0.001 m
+      v      = (8/60000) / (40 × 0.001 × 0.001) = 3.33333333 m/s
+      Re     = 997 × 3.33333333 × 0.001 / 0.00089 = 3734.08240  (transitional)
+      Pr     = 4180 × 0.00089 / 0.60 = 6.20033333
+      Laminar end of the blend (Shah & London, alpha = 1):
+        Nu_lam = 8.235 × (1 − 2.0421 + 3.0853 − 2.4765 + 1.0578 − 0.1861) = 8.235 × 0.4384 = 3.610224
+        f·Re   = 96 × (1 − 1.3553 + 1.9467 − 1.7012 + 0.9564 − 0.2537) = 96 × 0.5929 = 56.9184 (Darcy)
+      Turbulent end: Nu_turb(4000) = 0.023 × 4000^0.8 × 6.20033333^0.4 = 36.3363955
+                     f_turb(4000)  = 0.3164 × 4000^−0.25 = 0.0397851937
+      blend  = (3734.08240 − 2300) / 1700 = 0.843577881
+      Nu     = 3.610224 × (1 − 0.843577881) + 36.3363955 × 0.843577881 = 31.2172984
+      h      = 31.2172984 × 0.60 / 0.001 = 18730.3791 W/m²·K
+      A_wet  = 40 × 2 × (0.001 + 0.001) × 0.08 = 0.0128 m²
+      R_conv = 1 / (18730.3791 × 0.0128) = 0.00417103145 K/W
+      R_base = 0.002 / (385 × 0.01) = 0.000519480519 K/W
+      R_tot  = 0.04 + 0.02 + 0.000519480519 + 0.00417103145 = 0.0646905120 K/W
+      rise   = 700 / (0.132933333 × 4180) = 1.25976014 °C
+      Tj     = 25 + 0.5 × 1.25976014 + 700 × 0.0646905120 = 70.9132384 °C
+      f      = (56.9184 / 2300) × (1 − 0.843577881) + 0.0397851937 × 0.843577881 = 0.0374329080
+      ΔP     = 0.0374329080 × (0.08 / 0.001) × 997 × 3.33333333² / 2 = 16586.9374 Pa
+      P_pump = 16586.9374 × (8/60000) / 0.5 = 4.42318332 W
     """
     result = analyze(AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=8, coolant="water"))
+
+    assert result.reynolds == pytest.approx(3734.08240, rel=1e-6)
+    assert result.nusselt == pytest.approx(31.2172984, rel=1e-6)
+    assert result.heat_transfer_coeff_w_m2k == pytest.approx(18730.3791, rel=1e-6)
+    assert result.resistances_k_per_w["convection"] == pytest.approx(0.00417103145, rel=1e-6)
+    assert result.resistances_k_per_w["total"] == pytest.approx(0.0646905120, rel=1e-6)
+    assert result.coolant_rise_c == pytest.approx(1.25976014, rel=1e-6)
+    assert result.junction_temp_c == pytest.approx(70.9132384, rel=1e-6)
+    assert result.pressure_drop_pa == pytest.approx(16586.9374, rel=1e-6)
+    assert result.pump_power_w == pytest.approx(4.42318332, rel=1e-6)
 
     # Junction temp should be in the 70-85 C range for a well-designed cold plate
     assert 65 < result.junction_temp_c < 85, f"Tj={result.junction_temp_c:.1f} C, expected 70-85 C range"
@@ -277,6 +312,79 @@ def test_hand_calc_validation_default_case():
 
     # Pressure drop should be order of 10-50 kPa for microchannel cold plate
     assert 1000 < result.pressure_drop_pa < 100000
+
+
+def test_hand_calc_validation_laminar_default_geometry_4lpm():
+    """Laminar hand calculation on the default geometry: 700 W, 4 LPM, water, 25 °C.
+
+    Hand calculation (independent of model code):
+      Dh     = 0.001 m, alpha = 1
+      v      = (4/60000) / (40 × 0.001 × 0.001) = 1.66666667 m/s
+      Re     = 997 × 1.66666667 × 0.001 / 0.00089 = 1867.04120  (laminar)
+      Nu     = Nu_H1(1) = 8.235 × 0.4384 = 3.610224   (Shah & London)
+      h      = 3.610224 × 0.60 / 0.001 = 2166.1344 W/m²·K
+      R_conv = 1 / (2166.1344 × 0.0128) = 0.0360665525 K/W
+      R_tot  = 0.04 + 0.02 + 0.000519480519 + 0.0360665525 = 0.0965860330 K/W
+      m_dot  = (4/60000) × 997 = 0.0664666667 kg/s
+      rise   = 700 / (0.0664666667 × 4180) = 2.51952028 °C
+      Tj     = 25 + 0.5 × 2.51952028 + 700 × 0.0965860330 = 93.8699832 °C
+      f      = (f·Re)_Darcy(1) / Re = 56.9184 / 1867.04120 = 0.0304858833
+      ΔP     = 0.0304858833 × (0.08 / 0.001) × 997 × 1.66666667² / 2 = 3377.1584 Pa
+      P_pump = 3377.1584 × (4/60000) / 0.5 = 0.450287787 W
+    """
+    result = analyze(AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=4, coolant="water"))
+
+    assert result.regime == "laminar"
+    assert result.reynolds == pytest.approx(1867.04120, rel=1e-6)
+    assert result.nusselt == pytest.approx(3.610224, rel=1e-6)
+    assert result.heat_transfer_coeff_w_m2k == pytest.approx(2166.1344, rel=1e-6)
+    assert result.resistances_k_per_w["convection"] == pytest.approx(0.0360665525, rel=1e-6)
+    assert result.resistances_k_per_w["total"] == pytest.approx(0.0965860330, rel=1e-6)
+    assert result.coolant_rise_c == pytest.approx(2.51952028, rel=1e-6)
+    assert result.junction_temp_c == pytest.approx(93.8699832, rel=1e-6)
+    assert result.pressure_drop_pa == pytest.approx(3377.1584, rel=1e-6)
+    assert result.pump_power_w == pytest.approx(0.450287787, rel=1e-6)
+
+
+def test_full_wetted_area_uses_channel_aspect_ratio():
+    """A 0.5 mm × 2 mm channel (alpha = 0.25) uses its own laminar Nu and f·Re, and
+    swapping width and height gives the same Nu and f."""
+    tall = Geometry(channel_width_m=0.5e-3, channel_height_m=2.0e-3)
+    wide = Geometry(channel_width_m=2.0e-3, channel_height_m=0.5e-3)
+    tall_inp = AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=0.5, coolant="water", geometry=tall)
+    wide_inp = AnalyzeColdplateInput(heat_load_w=700, flow_rate_lpm=0.5, coolant="water", geometry=wide)
+    a, b = analyze(tall_inp), analyze(wide_inp)
+
+    assert a.regime == "laminar"
+    # Shah & London tabulated values at alpha = 0.25: Nu_H1 = 5.331, Darcy f·Re = 72.932.
+    assert a.nusselt == pytest.approx(5.331, rel=5e-3)
+    assert _darcy_f_re(a, tall_inp) == pytest.approx(72.932, rel=5e-3)
+    assert b.nusselt == pytest.approx(a.nusselt, rel=1e-12)
+    assert b.reynolds == pytest.approx(a.reynolds, rel=1e-12)
+    assert _darcy_f_re(b, wide_inp) / b.reynolds == pytest.approx(_darcy_f_re(a, tall_inp) / a.reynolds, rel=1e-9)
+
+
+@pytest.mark.parametrize("boundary_re", [2300.0, 4000.0])
+def test_full_wetted_area_nu_and_friction_continuous_at_regime_boundaries(boundary_re: float):
+    """On the full_wetted_area path Nu and f are continuous across Re = 2300 and Re = 4000."""
+    g = Geometry()
+    below_inp = _fin_input_at_re(boundary_re * (1 - 1e-9), g)
+    above_inp = _fin_input_at_re(boundary_re * (1 + 1e-9), g)
+    below, above = analyze(below_inp), analyze(above_inp)
+    assert below.regime != above.regime
+    assert above.nusselt == pytest.approx(below.nusselt, rel=1e-6)
+    f_below = _darcy_f_re(below, below_inp) / below.reynolds
+    f_above = _darcy_f_re(above, above_inp) / above.reynolds
+    assert f_above == pytest.approx(f_below, rel=1e-6)
+
+
+def test_full_wetted_area_energy_balance_closes():
+    """Q = m_dot·cp·ΔT within 1% (and to round-off) at laminar, transitional and turbulent flows."""
+    for flow_lpm in (1.0, 4.0, 8.0, 10.0):
+        result = analyze(AnalyzeColdplateInput(heat_load_w=700.0, flow_rate_lpm=flow_lpm, coolant="water"))
+        m_dot = flow_lpm / 60000.0 * 997.0
+        assert m_dot * 4180.0 * result.coolant_rise_c == pytest.approx(700.0, rel=1e-2)
+        assert m_dot * 4180.0 * result.coolant_rise_c == pytest.approx(700.0, rel=1e-12)
 
 
 # --- Rack-level model validation ---
@@ -296,8 +404,8 @@ def test_rack_series_two_gpu_hand_calc():
     Hand calculation:
       m_dot = (8/60/1000) × 997 = 0.13293 kg/s
       coolant_rise = 700 / (0.13293 × 4180) = 1.260 °C
-      GPU 1 Tj  ≈ 70.9 °C  (default case, validated above)
-      GPU 2 Tj  ≈ 70.9 + 1.260 = 72.16 °C
+      GPU 1 Tj  ≈ 70.91 °C  (default case, validated above)
+      GPU 2 Tj  ≈ 70.91 + 1.260 = 72.17 °C
       CDU outlet = 25.0 + 2 × 1.260 = 27.52 °C
       total_dp  = 2 × dp_single
     """
@@ -509,7 +617,7 @@ def test_sensitivity_dtj_dq_hand_calc():
       m_dot = 8/60000 * 997 = 0.13293 kg/s
       0.5/(m_dot*cp) = 0.5/(0.13293 * 4180) = 8.98e-4
       R_total = (Tj - T_inlet) / Q - 0.5/(m_dot*cp)
-               = (70.9 - 25) / 700 - 8.98e-4 ≈ 0.0647
+               = (70.91 - 25) / 700 - 8.98e-4 ≈ 0.0647
       ∂Tj/∂Q ≈ 8.98e-4 + (Tj-T_inlet)/Q - 8.98e-4 = (Tj - T_inlet) / Q
     Simpler: ∂Tj/∂Q = Tj_deviation / Q (since Tj is linear in Q here).
     """

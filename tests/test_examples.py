@@ -43,7 +43,7 @@ def test_mcp_client_demo_runs():
     assert "analyze_coldplate" in output
     assert "generate_decision_report" in output
     # Structured tool result flows back with the canonical default-case Tj.
-    assert "70.90231" in output
+    assert "70.91323" in output
     assert "schema version:     2" in output
     assert "evaluated flow:     8.00 LPM/GPU" in output
     assert "system hydraulics:  not_assessed" in output
@@ -64,7 +64,7 @@ def test_compact_review_cases_run():
     }
     assert "meets_target" in lines["Fixed 8 LPM"]
     assert "8.000" in lines["Fixed 8 LPM"]
-    assert "70.90" in lines["Fixed 8 LPM"]
+    assert "70.91" in lines["Fixed 8 LPM"]
     assert "no_feasible_flow_in_search_range" in lines["Failed thermal search"]
     assert "undetermined" in lines["Series candidate"]
     assert "undetermined" in lines["Unavailable rack"]
@@ -76,8 +76,13 @@ def test_make_figures_runs_and_is_deterministic(tmp_path: Path):
     pytest.importorskip("matplotlib")
     first = tmp_path / "first"
     second = tmp_path / "second"
-    assert "straight_fin_correlations.png" in _run_example("make_figures.py", "--out", str(first))
+    output = _run_example("make_figures.py", "--out", str(first))
+    assert "straight_fin_correlations.png" in output
     _run_example("make_figures.py", "--out", str(second))
     png = (first / "straight_fin_correlations.png").read_bytes()
     assert png.startswith(b"\x89PNG")
     assert png == (second / "straight_fin_correlations.png").read_bytes()
+    assert "default_plate_tj_vs_flow.png" in output
+    flow_png = (first / "default_plate_tj_vs_flow.png").read_bytes()
+    assert flow_png.startswith(b"\x89PNG")
+    assert flow_png == (second / "default_plate_tj_vs_flow.png").read_bytes()

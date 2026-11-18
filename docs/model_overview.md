@@ -41,7 +41,7 @@ and must come from the caller or measured data.
 | Category | Examples in this model | Interpretation |
 |---|---|---|
 | Conservation / definitions | `Q_dot = m_dot * cp * deltaT`, continuity, `Dh`, `Re`, `Pr` | General relationships under the stated steady single-phase assumptions |
-| Analytical idealizations | Fully developed laminar `Nu=4.36` under constant heat flux; Darcy–Weisbach form | Conditional idealizations that require the stated flow and boundary assumptions |
+| Analytical idealizations | Fully developed laminar rectangular-duct `Nu` and `f·Re` (Shah & London, H1) at the channel aspect ratio; Darcy–Weisbach form | Conditional idealizations that require the stated flow and boundary assumptions |
 | Empirical closures | Dittus–Boelter `Nu`, smooth-pipe Blasius friction | First-pass approximations; correlation domain and geometry matter |
 | Numerical interpolation | Transitional blend between laminar and turbulent endpoints | Solver continuity choice, not a physical or experimental correlation |
 | Device or scenario inputs | `R_jc`, `R_tim`, channel geometry, coolant properties, pump efficiency, Tj limit | Must have provenance or be labeled as assumptions; defaults are not measured hardware facts |
@@ -87,9 +87,11 @@ Re = rho * v * Dh / mu
 Pr = cp * mu / k
 ```
 
-The model closes heat transfer with `Nu=4.36` for its fully developed,
-constant-heat-flux laminar idealization and Dittus–Boelter for its turbulent
-approximation:
+The model closes heat transfer with the Shah & London fully developed laminar
+rectangular-duct `Nu` (H1 boundary condition, four walls heated) evaluated at the
+aspect ratio `alpha = min(width, height) / max(width, height)` (`Nu = 3.610` and
+Darcy `f·Re = 56.92` for the default square channel), and Dittus–Boelter for its
+turbulent approximation:
 
 ```text
 h = Nu * k / Dh
@@ -100,7 +102,7 @@ uses Reynolds number, Prandtl number, length/hydraulic-diameter ratio, aspect
 ratio, relative roughness, wall boundary condition, and developing-flow
 corrections. Its [laminar duct procedure](https://fchart.com/ees/heat_transfer_library/internal_flow/hs1122.htm)
 expects `Re < 2300` and uses bulk-average properties. Those documented inputs
-show why a single `Nu=4.36` or Dittus–Boelter value cannot establish accuracy for
+show why a fully developed laminar `Nu` or a Dittus–Boelter value cannot establish accuracy for
 arbitrary rectangular cold plates. This implementation does not model those
 corrections or enforce a correlation-specific validity range. The linear
 transition blend from `Re=2300` to `Re=4000` provides numerical continuity for
@@ -114,7 +116,8 @@ The channel pressure drop uses Darcy–Weisbach with hydraulic diameter:
 deltaP = f * (L / Dh) * (rho * v^2 / 2)
 ```
 
-The turbulent friction closure is the smooth-pipe Blasius form:
+The laminar friction factor is `f = (f·Re)_Darcy(alpha) / Re` from the same
+Shah & London fit; the turbulent closure is the smooth-pipe Blasius form:
 
 ```text
 f = 0.3164 * Re^(-0.25)
@@ -143,12 +146,12 @@ coolant rise                 1.25976°C
 mean coolant rise            0.62988°C
 package + TIM rise          42.00000°C   (700 * (0.04 + 0.02))
 base conduction rise         0.363636°C
-convection rise              2.90879°C
-reported junction temp      70.9023°C
-pressure drop               16.8003 kPa
+convection rise              2.91972°C
+reported junction temp      70.9132°C
+pressure drop               16.5869 kPa
 ```
 
-The temperature is therefore `25 + 0.62988 + 42 + 0.363636 + 2.90879`.
+The temperature is therefore `25 + 0.62988 + 42 + 0.363636 + 2.91972`.
 This is a reproducible calculation of the stated model and inputs, not measured
 validation of an H100 or any other physical cold plate.
 
