@@ -1,18 +1,21 @@
 # PROGRESS
 
 ## Resume here
-P1 (pull request 56) and P2 (pull request 57) are merged. P4, the reference case and chip benchmark
-rerun, is in review on `feat/reference-case-benchmarks` (brief `docs/briefs/p4-reference-case.md`):
-`examples/reference_case.py`, the hero figure `docs/img/chip_reference_case.png` and
-`docs/fidelity-results.md`. P3 (temperature-dependent coolants) is deferred by the owner until after
-the demo, so P4 runs on fixed 25 °C properties and says so.
-Next: (1) checker re-runs the P4 numbers against the results page; (2) Riccardo reviews and merges the
-P4 pull request; (3) P5 or Milestone 2.
+P1 (pull request 56), P2 (pull request 57) and P4 (pull request 58) are merged. P4b, the
+package-resistance band (brief `docs/briefs/p4b-package-band.md`), is implemented on
+`docs/case-study-page` (pull request 59) with the case-study page `docs/index.html`: configuration C
+for H100 and the Blackwell GPU with a package estimated from die area, chip labels and sources
+corrected, examples only. Area-specific package fields in the schema are a deferred option
+(review section 3.3). P3 is deferred by the owner until after the demo.
+Next: (1) checker re-runs the P4b band against the brief; (2) Riccardo reviews and merges pull
+request 59; (3) P5 or Milestone 2.
 
 ## Open questions for Riccardo
 - P3: cited source for glycol properties (when P3 resumes).
 
 ## Done
+- 2026-11-18: P4b implemented on `docs/case-study-page`: package band in
+  `examples/reference_case.py`, chip relabel, figure, results page and case study updated.
 - 2026-11-17: P4 implemented on `feat/reference-case-benchmarks`; owner set the reference flow to
   1.5 LPM/kW and the hero figure to a straight-fin reference plate beside the default plate.
 - 2026-11-17: P1 and P2 merged as pull requests 56 and 57.

@@ -3,8 +3,10 @@
 Status: **accepted 2026-11-15**. Riccardo accepted the recommendation for each of D1 to D7 in the
 "Owner decisions" table; the durable record is in `docs/decisions.md`. Briefs live in `docs/briefs/`.
 
-Progress (2026-11-17): P1 merged (pull request 56), P2 merged (pull request 57), P4 in review on
-`feat/reference-case-benchmarks`, P3 deferred by the owner until after the demo, P5 not started.
+Progress (2026-11-18): P1 merged (pull request 56), P2 merged (pull request 57), P4 merged (pull
+request 58), P4b (package band) in review on `docs/case-study-page` (pull request 59), P3 deferred by
+the owner until after the demo, P5 not started. Area-specific package fields in the schema are a
+deferred option (described in `docs/research/package-resistance-review.md` section 3.3).
 
 Sources: `docs/fable-handoff.md` (findings from `thermal-design-loop`), `docs/product-thesis-review.md`
 (Milestones 1 to 3), `docs/milestone-1-contract.md`.
@@ -81,7 +83,10 @@ Status: deferred by the owner until after the demo (2026-11-17).
 
 ### P4. Reference case and benchmark rerun
 
-Status: in review (brief `docs/briefs/p4-reference-case.md`). Run on P1 and P2 only, with fixed
+Status: merged (pull request 58; brief `docs/briefs/p4-reference-case.md`). Follow-up P4b (brief
+`docs/briefs/p4b-package-band.md`) adds a package band estimated from die area for H100 and the
+Blackwell GPU in configuration C, in the examples only, and relabels chip sources; limit and TDP
+values unchanged. Run on P1 and P2 only, with fixed
 25 °C properties, because P3 is deferred. The reference flow is 1.5 LPM/kW and the reference plate is
 the straight-fin design; results in `docs/fidelity-results.md` from the new
 `examples/reference_case.py`, with `examples/real_chip_benchmarks.py` left unchanged.

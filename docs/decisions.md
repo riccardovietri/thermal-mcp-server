@@ -4,6 +4,31 @@ Durable project decisions that should survive across branches and sessions.
 Use this file for choices that future agents and contributors should not need to
 re-derive from old PRs or chat logs.
 
+## 2026-11-18 — Package resistance shown as a die-area band, in the examples only
+
+After the package resistance review (`docs/research/package-resistance-review.md`),
+the owner decided (brief `docs/briefs/p4b-package-band.md`):
+
+1. Show estimated package resistance as a band, not a point, for the chips whose
+   die area is known (H100, and the Blackwell GPU with an order-of-magnitude
+   footprint). Keep the generic 60 mK/W (`R_jc` 0.04 + `R_tim` 0.02 K/W) as a
+   labelled conservative case.
+2. Do it in the examples only. `src/`, the schema, defaults and the `R_jc` /
+   `R_tim` defaults are untouched. Area-specific schema fields (`die_area_m2` and
+   area-specific `R_jc` / `R_tim`) remain a deferred option, described in the review.
+3. MI300X and Gaudi 3 stay on the generic values, labelled "die area not published".
+4. Relabel chip sources; keep every limit and TDP value. The 1200 W row becomes
+   "Blackwell GPU (GB200 NVL72)", cited to the NVIDIA Blackwell datasheet; 75 °C
+   is a design target whose source could not be traced; H100 83 °C is a
+   conservative design value, not vendor-published for SXM.
+5. Flag the Gaudi 3 liquid-cooled power conflict (Hot Chips 2024: 1200 W; Intel's
+   2025 technical paper: 900 W).
+
+Rationale:
+
+- The package term dominates the reference case, no vendor publishes it, and a
+  single invented value would hide that; a band with its basis is auditable.
+
 ## 2026-11-15 — Model fidelity track runs between Milestone 1 and Milestone 2
 
 The owner accepted the recommendations for decisions D1 to D7 in

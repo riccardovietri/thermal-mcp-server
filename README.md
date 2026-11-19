@@ -157,10 +157,13 @@ hand-calculation references are in [`docs/physics.md`](docs/physics.md).
 
 ## Public Reference Cases
 
-The examples include H100 SXM, B200 / GB200 NVL72-style, MI300X, and Gaudi 3 cases.
-Only H100 TDP and thermal limit are treated as vendor-published values in the
-default examples. Other limits, package resistances, and high-power cold-plate
-geometry are marked as estimates or proxies where vendors do not publish them.
+The examples include H100 SXM, Blackwell GPU (GB200 NVL72), MI300X, and Gaudi 3
+cases. H100 700 W and Blackwell GPU 1200 W are from NVIDIA documents. No junction
+limit in the examples is vendor-published for that part: H100 83 °C is a
+conservative design value, Blackwell 75 °C is a design target, and MI300X and
+Gaudi 3 use 85 °C proxies. Package resistances and high-power cold-plate geometry
+are estimates; `examples/reference_case.py` shows the package as a band estimated
+from die area for H100 and the Blackwell GPU, beside the generic 60 mK/W case.
 
 See [`docs/public_specs.md`](docs/public_specs.md) and
 [`examples/real_chip_benchmarks.py`](examples/real_chip_benchmarks.py).

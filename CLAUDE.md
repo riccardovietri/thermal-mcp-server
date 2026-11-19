@@ -111,11 +111,21 @@ dict in `physics.py` with a cited source for property values.
 
 ## Chip reference data (in examples/)
 
-`examples/real_chip_benchmarks.py` contains vendor-cited TDP and Tj specs:
-- H100 SXM: 700W, 83°C throttle onset (NVIDIA datasheet)
-- B200 NVL72: 1200W, 75°C (SemiAnalysis estimate, not NVIDIA-published)
-- MI300X: 750W, 85°C proxy (AMD does not publish Tj_max)
-- Gaudi 3 OAM: 900W air / 1200W liquid, 85°C proxy (Intel does not publish)
+`examples/real_chip_benchmarks.py` contains TDP and Tj values with their sources
+(source list in `docs/research/package-resistance-review.md`):
+- H100 SXM: 700W (NVIDIA H100 product page); 83°C conservative design value, not
+  vendor-published for SXM (the H100 PCIe product brief gives 87°C)
+- Blackwell GPU (GB200 NVL72): 1200W (NVIDIA Blackwell datasheet, configurable up
+  to 1,200 W per GPU); 75°C design target whose source could not be traced, not a
+  vendor limit
+- MI300X: 750W (trade press; AMD data sheet not opened), 85°C proxy (AMD does not
+  publish Tj_max)
+- Gaudi 3 OAM: 900W air (Intel 2025 technical paper) / 1200W liquid (Intel Hot
+  Chips 2024; the 2025 paper states 900 W liquid-cooled), 85°C proxy (Intel does
+  not publish)
+
+`examples/reference_case.py` also shows a package band estimated from die area
+for H100 and the Blackwell GPU (examples only; defaults unchanged).
 
 Do not change these without a current source citation.
 
