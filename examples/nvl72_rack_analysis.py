@@ -21,7 +21,7 @@ Thermal assumptions (B200-specific, documented per CLAUDE.md protocol):
   - Cold plate geometry: 60 channels × 0.7 mm × 1.5 mm, 100 mm long,
     1.5 mm base, 160 cm² contact area. This is a high-performance cold plate
     sized for B200 TDP — not the H100 default geometry.
-  - Tj limit: 75°C throttle onset per SemiAnalysis estimate. NVIDIA does not
+  - Tj limit: 75°C design target; its source could not be traced. NVIDIA does not
     publish Tj_max for B200.
 """
 
@@ -39,7 +39,7 @@ from thermal_mcp_server.schemas import (
 # ---------------------------------------------------------------------------
 
 B200_TDP_W = 1200.0
-B200_TJ_LIMIT_C = 75.0  # SemiAnalysis estimate; not NVIDIA-published
+B200_TJ_LIMIT_C = 75.0  # design target, source not traceable; not NVIDIA-published
 B200_R_JC = 0.02  # K/W — engineering estimate; see module docstring
 B200_R_TIM = 0.015  # K/W — better TIM assumed for high-TDP package
 NVL72_GPU_COUNT = 72
@@ -229,7 +229,7 @@ if __name__ == "__main__":
     print()
     print("  NOTE: B200 R_jc = 0.02 K/W is an engineering estimate.")
     print("  NVIDIA does not publish this value. Tj limit (75°C) is a")
-    print("  SemiAnalysis estimate, not an NVIDIA-published specification.")
+    print("  design target with no traceable source, not an NVIDIA-published specification.")
     print()
 
     single_results = section_single_plate_sizing()

@@ -31,7 +31,7 @@ DIVIDER = "\n" + "=" * 72 + "\n"
 # ---------------------------------------------------------------------------
 # Scenario 1: H100 SXM — 8-GPU DGX-class, series vs parallel
 # H100 SXM TDP: 700 W (NVIDIA datasheet)
-# Tj throttle onset: 83°C (NVIDIA thermal guidelines)
+# Tj design value: 83°C (conservative; not vendor-published for SXM, the H100 PCIe brief gives 87°C)
 # R_jc, R_tim: engineering estimates; NVIDIA does not publish these.
 # ---------------------------------------------------------------------------
 
@@ -53,7 +53,7 @@ def scenario_h100_series_vs_parallel() -> None:
     print(DIVIDER)
     print("Input provenance:")
     print("  heat_load_w=700  [published — NVIDIA H100 SXM datasheet]")
-    print("  target_junction_temp_c=83  [published — NVIDIA thermal guidelines]")
+    print("  target_junction_temp_c=83  [design value — not vendor-published for SXM; H100 PCIe brief gives 87°C]")
     print("  R_jc, R_tim  [engineering estimates — NVIDIA does not publish these]")
     print()
 
@@ -66,8 +66,8 @@ def scenario_h100_series_vs_parallel() -> None:
 
 # ---------------------------------------------------------------------------
 # Scenario 2: B200-proxy — high-power 8-GPU rack
-# B200 TDP: 1200 W (SemiAnalysis estimate — NOT NVIDIA-published)
-# Tj limit: 75°C (SemiAnalysis estimate — NOT NVIDIA-published)
+# B200 TDP: 1200 W (NVIDIA Blackwell datasheet: configurable up to 1,200 W per GPU in GB200 NVL72)
+# Tj limit: 75°C (design target, source not traceable; NOT NVIDIA-published)
 # All thermal resistances are engineering estimates.
 # Geometry: high-performance cold plate (narrower channels, larger contact area)
 # ---------------------------------------------------------------------------
@@ -87,8 +87,8 @@ def scenario_b200_proxy() -> None:
     print("SCENARIO 2: B200-proxy — 1200 W, 8 GPUs, Parallel, 20°C Inlet")
     print(DIVIDER)
     print("Input provenance:")
-    print("  heat_load_w=1200  [ESTIMATED — SemiAnalysis; NOT NVIDIA-published]")
-    print("  target_junction_temp_c=75  [ESTIMATED — SemiAnalysis; NOT NVIDIA-published]")
+    print("  heat_load_w=1200  [NVIDIA Blackwell datasheet: up to 1,200 W per GPU in GB200 NVL72]")
+    print("  target_junction_temp_c=75  [DESIGN TARGET — source not traceable; NOT NVIDIA-published]")
     print("  R_jc=0.02, R_tim=0.015  [engineering estimates for larger die]")
     print("  Geometry: high-performance cold plate (engineering estimate)")
     print()
