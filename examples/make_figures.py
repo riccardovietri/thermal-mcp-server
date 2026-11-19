@@ -12,7 +12,9 @@ Writes three figures:
 - docs/img/chip_reference_case.png: junction temperature, pressure drop and the
   H100 resistance stack for the public chips at 35 °C inlet, from
   examples/reference_case.py (A: default plate 8 LPM; B: default plate and
-  C: reference straight-fin plate, both at 1.5 LPM/kW).
+  C: reference straight-fin plate, both at 1.5 LPM/kW, all with the generic
+  60 mK/W package). For H100 and the Blackwell GPU it adds configuration C with
+  the package estimated from die area, as a range (bare die low to lidded high).
 
 The "former" curves are computed here from the literal constants 4.36 and 64;
 no legacy code path is kept in physics.py. Deterministic and offline. Requires
@@ -162,6 +164,9 @@ CONFIG_STYLE = {
     "B": {"color": "#D55E00", "marker": "^", "label": f"B  default plate, {FLOW_PER_KW_LPM:g} LPM/kW"},
     "C": {"color": "#0072B2", "marker": "o", "label": f"C  straight-fin plate, {FLOW_PER_KW_LPM:g} LPM/kW"},
 }
+BAND_COLOUR = "#009E73"
+BAND_LABEL = "C with package estimated from die area (bare die low to lidded high)"
+BAND_ENDS = (("bare die", "low"), ("lidded", "high"))
 STACK_STYLE = (
     ("junction_to_case", "R_jc", "#4d4d4d"),
     ("tim", "R_tim", "#9a9a9a"),
@@ -178,12 +183,13 @@ def chip_reference_case(out_dir: Path) -> Path:
         if p["chip"] not in chips:
             chips.append(p["chip"])
     by_key = {(p["chip"], p["config"]): p for p in points}
+    band = {(b["chip"], b["build"], b["end"]): b for b in data["package_band"]}
     rows = list(range(len(chips)))[::-1]  # first chip on top
     row_of = dict(zip(chips, rows))
     labels = [f"{c}\n{by_key[(c, 'A')]['tdp_w']:.0f} W" for c in chips]
 
-    fig = plt.figure(figsize=(10.0, 6.6))
-    grid = fig.add_gridspec(2, 2, width_ratios=[1.35, 1.0], height_ratios=[1.75, 1.0], hspace=0.55, wspace=0.08)
+    fig = plt.figure(figsize=(10.0, 7.6))
+    grid = fig.add_gridspec(2, 2, width_ratios=[1.35, 1.0], height_ratios=[1.75, 1.25], hspace=0.5, wspace=0.08)
     ax_t = fig.add_subplot(grid[0, 0])
     ax_p = fig.add_subplot(grid[0, 1], sharey=ax_t)
     ax_r = fig.add_subplot(grid[1, :])
@@ -198,6 +204,10 @@ def chip_reference_case(out_dir: Path) -> Path:
                 style = CONFIG_STYLE[cfg]
                 ax.plot([p[key]], [y], style["marker"], ms=7.5, color=style["color"], mec="white", mew=0.8, zorder=3)
         ax_t.plot([trio[0]["tj_limit_c"]], [y], "|", ms=24, mew=1.6, color="black", zorder=2)
+        ends = [band.get((chip, build, end)) for build, end in BAND_ENDS]
+        if all(e is not None for e in ends):
+            lo, hi = (e["tj_c"] for e in ends if e is not None)
+            ax_t.plot([lo, hi], [y - 0.27, y - 0.27], color=BAND_COLOUR, lw=5.0, solid_capstyle="butt", zorder=2)
 
     ax_t.set_yticks(rows)
     ax_t.set_yticklabels(labels, fontsize=8.5)
@@ -226,28 +236,31 @@ def chip_reference_case(out_dir: Path) -> Path:
         plt.Line2D([], [], ls="none", marker=s["marker"], ms=7.5, color=s["color"], mec="white", mew=0.8, label=s["label"]) for s in CONFIG_STYLE.values()
     ]
     handles.append(plt.Line2D([], [], ls="none", marker="|", ms=12, mew=1.6, color="black", label="chip limit"))
-    fig.legend(handles=handles, loc="upper center", ncol=4, fontsize=8.5, frameon=False, bbox_to_anchor=(0.5, 0.995), handletextpad=0.3, columnspacing=1.4)
+    handles.append(plt.Line2D([], [], color=BAND_COLOUR, lw=5.0, solid_capstyle="butt", label=BAND_LABEL))
+    fig.legend(handles=handles, loc="upper center", ncol=3, fontsize=8.5, frameon=False, bbox_to_anchor=(0.5, 0.995), handletextpad=0.4, columnspacing=1.4)
 
-    # Resistance stack for the first chip (H100) in A, B, C.
+    # Resistance stack for the first chip (H100) in A, B, C (generic package), then C at
+    # the low and high ends of the estimated package band.
     chip = chips[0]
-    stack_rows = [2, 1, 0]
-    for cfg, y in zip(("A", "B", "C"), stack_rows):
-        p = by_key[(chip, cfg)]
+    plate_name = {"default": "default plate", "reference": "straight-fin plate"}
+    stack = [
+        (f"{cfg}  {plate_name[by_key[(chip, cfg)]['plate']]}, {by_key[(chip, cfg)]['flow_lpm']:.2f} LPM", by_key[(chip, cfg)]["resistances_k_per_w"])
+        for cfg in ("A", "B", "C")
+    ]
+    stack += [(f"C  package est., {build} {end}", band[(chip, build, end)]["resistances_k_per_w"]) for build, end in BAND_ENDS]
+    stack_rows = list(range(len(stack)))[::-1]
+    for (_, resistances), y in zip(stack, stack_rows):
         left = 0.0
         for key, name, colour in STACK_STYLE:
-            width = p["resistances_k_per_w"][key] * 1000.0
+            width = resistances[key] * 1000.0
             ax_r.barh(y, width, left=left, height=0.62, color=colour, edgecolor="white", lw=0.8)
             if width >= 5.0:
                 text_colour = "white" if key in ("junction_to_case",) else "black"
                 ax_r.text(left + width / 2, y, f"{width:.1f}", ha="center", va="center", fontsize=8, color=text_colour)
             left += width
         ax_r.text(left + 1.0, y, f"{left:.1f} mK/W", ha="left", va="center", fontsize=8.5)
-    plate_name = {"default": "default plate", "reference": "straight-fin plate"}
     ax_r.set_yticks(stack_rows)
-    ax_r.set_yticklabels(
-        [f"{cfg}  {plate_name[by_key[(chip, cfg)]['plate']]}, {by_key[(chip, cfg)]['flow_lpm']:.2f} LPM" for cfg in ("A", "B", "C")],
-        fontsize=8.5,
-    )
+    ax_r.set_yticklabels([label for label, _ in stack], fontsize=8.5)
     ax_r.set_xlim(0.0, 112.0)
     ax_r.set_xlabel("thermal resistance (mK/W)")
     ax_r.set_title(f"{chip} resistance stack (coolant bulk rise not included)", fontsize=10, loc="left")
@@ -264,7 +277,7 @@ def chip_reference_case(out_dir: Path) -> Path:
         columnspacing=1.0,
     )
 
-    fig.subplots_adjust(left=0.2, right=0.97, top=0.9, bottom=0.08)
+    fig.subplots_adjust(left=0.2, right=0.97, top=0.88, bottom=0.07)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "chip_reference_case.png"
     fig.savefig(path, dpi=120, metadata={"Software": None})

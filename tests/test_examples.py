@@ -99,9 +99,9 @@ REFERENCE_CASE_EXPECTED = {
     ("H100 SXM", "A"): (80.9, 16.59, 3734),
     ("H100 SXM", "B"): (107.4, 0.89, 490),
     ("H100 SXM", "C"): (87.3, 0.71, 125),
-    ("B200 (NVL72)", "A"): (113.7, 16.59, 3734),
-    ("B200 (NVL72)", "B"): (155.7, 1.52, 840),
-    ("B200 (NVL72)", "C"): (121.2, 1.22, 214),
+    ("Blackwell GPU (GB200 NVL72)", "A"): (113.7, 16.59, 3734),
+    ("Blackwell GPU (GB200 NVL72)", "B"): (155.7, 1.52, 840),
+    ("Blackwell GPU (GB200 NVL72)", "C"): (121.2, 1.22, 214),
     ("MI300X", "A"): (84.2, 16.59, 3734),
     ("MI300X", "B"): (112.2, 0.95, 525),
     ("MI300X", "C"): (90.7, 0.76, 134),
@@ -115,8 +115,8 @@ REFERENCE_CASE_EXPECTED = {
 REFERENCE_MIN_FLOW_EXPECTED = {
     ("H100 SXM", "default"): 6.607,
     ("H100 SXM", "reference"): 9.772,
-    ("B200 (NVL72)", "default"): None,
-    ("B200 (NVL72)", "reference"): None,
+    ("Blackwell GPU (GB200 NVL72)", "default"): None,
+    ("Blackwell GPU (GB200 NVL72)", "reference"): None,
     ("MI300X", "default"): 7.331,
     ("MI300X", "reference"): 20.789,
     ("Gaudi 3 OAM (air)", "default"): None,
@@ -172,8 +172,63 @@ def test_real_chip_benchmarks_reference_data_unchanged(monkeypatch: pytest.Monke
     chips = _import_example(monkeypatch, "real_chip_benchmarks").ALL_CHIPS
     assert [(c.name, c.tdp_w, c.tj_limit_c) for c in chips] == [
         ("H100 SXM", 700, 83.0),
-        ("B200 (NVL72)", 1200, 75.0),
+        ("Blackwell GPU (GB200 NVL72)", 1200, 75.0),
         ("MI300X", 750, 85.0),
         ("Gaudi 3 OAM (air)", 900, 85.0),
         ("Gaudi 3 OAM (liquid)", 1200, 85.0),
     ]
+
+
+# Expected values from docs/briefs/p4b-package-band.md (gate G1), configuration C,
+# at the printed precision: R_jc, R_tim and sum 0.001 mK/W, Tj 0.01 °C.
+PACKAGE_BAND_EXPECTED = {
+    ("H100 SXM", "bare die", "low"): (5.035, 4.914, 9.949, 52.25),
+    ("H100 SXM", "bare die", "high"): (8.056, 14.742, 22.798, 61.24),
+    ("H100 SXM", "lidded", "low"): (12.647, 4.914, 17.561, 57.58),
+    ("H100 SXM", "lidded", "high"): (23.771, 14.742, 38.513, 72.24),
+    ("Blackwell GPU (GB200 NVL72)", "bare die", "low"): (2.627, 2.564, 5.191, 55.43),
+    ("Blackwell GPU (GB200 NVL72)", "bare die", "high"): (4.203, 7.692, 11.896, 63.48),
+    ("Blackwell GPU (GB200 NVL72)", "lidded", "low"): (6.599, 2.564, 9.163, 60.20),
+    ("Blackwell GPU (GB200 NVL72)", "lidded", "high"): (12.404, 7.692, 20.096, 73.32),
+}
+
+
+def test_package_band_matches_expected_values(monkeypatch: pytest.MonkeyPatch):
+    module = _import_example(monkeypatch, "reference_case")
+    assert module.DIE_AREA_M2 == {"H100 SXM": pytest.approx(8.14e-4), "Blackwell GPU (GB200 NVL72)": pytest.approx(15.6e-4)}
+    data = module.reference_case()
+    band = {(b["chip"], b["build"], b["end"]): b for b in data["package_band"]}
+    generic = {key: b for key, b in band.items() if key[1] == "generic"}
+    assert set(band) - set(generic) == set(PACKAGE_BAND_EXPECTED)
+    for key, (r_jc, r_tim, total, tj) in PACKAGE_BAND_EXPECTED.items():
+        b = band[key]
+        assert round(b["r_jc_k_per_w"] * 1000.0, 3) == r_jc, key
+        assert round(b["r_tim_k_per_w"] * 1000.0, 3) == r_tim, key
+        assert round((b["r_jc_k_per_w"] + b["r_tim_k_per_w"]) * 1000.0, 3) == total, key
+        assert round(b["tj_c"], 2) == tj, key
+        assert b["margin_c"] == pytest.approx(b["tj_limit_c"] - b["tj_c"])
+        assert b["config"] == "C" and b["flow_lpm"] == pytest.approx(1.5 * b["tdp_w"] / 1000.0)
+        assert (b["r_jc_k_per_w"], b["r_tim_k_per_w"]) == pytest.approx(module.package_resistances(b["die_area_m2"], key[1], key[2]))
+
+    # The generic case in the band is the existing configuration C point.
+    points = {(p["chip"], p["config"]): p for p in data["points"]}
+    assert {key[0] for key in generic} == {"H100 SXM", "Blackwell GPU (GB200 NVL72)"}
+    for (chip, _, _), b in generic.items():
+        assert (b["r_jc_k_per_w"], b["r_tim_k_per_w"]) == (0.04, 0.02)
+        assert b["tj_c"] == pytest.approx(points[(chip, "C")]["tj_c"])
+
+
+def test_package_resistances_rejects_unknown_build(monkeypatch: pytest.MonkeyPatch):
+    module = _import_example(monkeypatch, "reference_case")
+    with pytest.raises(ValueError):
+        module.package_resistances(8.14e-4, "soldered", "low")
+
+
+def test_reference_case_prints_package_band():
+    output = _run_example("reference_case.py")
+    assert "Package band, configuration C" in output
+    assert "no hotspot factor" in output
+    assert "not a measured die area" in output
+    assert "MI300X: generic package only (die area not published)" in output
+    assert "72.24" in output
+    assert "73.32" in output

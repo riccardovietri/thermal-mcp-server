@@ -16,7 +16,8 @@ from thermal_mcp_server.physics import COOLANTS, analyze, optimize_flow
 from thermal_mcp_server.schemas import AnalyzeColdplateInput, OptimizeFlowRateInput
 
 # ---------------------------------------------------------------------------
-# Chip specs — verified against vendor datasheets
+# Chip specs: TDP from vendor documents where found; limits are design values
+# Sources and tags are from docs/research/package-resistance-review.md (S1 to S33).
 # ---------------------------------------------------------------------------
 
 
@@ -26,19 +27,57 @@ class ChipSpec:
     tdp_w: float
     tj_limit_c: float
     tj_source: str
+    tdp_source: str = ""
 
 
 # Sources:
-# H100 SXM:  NVIDIA H100 Datasheet (resources.nvidia.com)
-# B200 NVL72: SemiAnalysis GB200 architecture analysis + NVIDIA product page
-# MI300X:    AMD Instinct MI300X Data Sheet (amd.com)
-# Gaudi 3:   Intel Gaudi 3 HL-325L OAM Product Brief (intel.com)
+# H100 SXM:  700 W "Up to 700W (configurable)", NVIDIA H100 product page (S3).
+#            83 °C is a conservative design value, not vendor-published for SXM; the
+#            NVIDIA H100 PCIe product brief gives 87 °C GPU qualification temperature (S1).
+# Blackwell GPU (GB200 NVL72): 1200 W "Configurable up to 1,200 W" per GPU in GB200 NVL72,
+#            NVIDIA Blackwell datasheet (S6); HGX B200 is the same GPU family at up to 1,000 W.
+#            75 °C is a design target whose source could not be traced; not a vendor limit.
+# MI300X:    750 W as reported by Tom's Hardware (S28); AMD's data sheet could not be opened.
+#            AMD does not publish a junction limit; 85 °C is a proxy.
+# Gaudi 3:   900 W air, Intel Gaudi 3 technical paper (S9). 1200 W liquid is from Intel's
+#            Hot Chips 2024 slides (S10); the 2025 technical paper (S9) states 900 W liquid-cooled.
+#            Intel does not publish a junction limit; 85 °C is a proxy.
 
-H100_SXM = ChipSpec("H100 SXM", 700, 83.0, "NVIDIA datasheet, throttle onset")
-B200_NVL72 = ChipSpec("B200 (NVL72)", 1200, 75.0, "SemiAnalysis; not NVIDIA-published")
-MI300X = ChipSpec("MI300X", 750, 85.0, "AMD does not publish Tj_max; 85°C used as conservative proxy")
-GAUDI3_AIR = ChipSpec("Gaudi 3 OAM (air)", 900, 85.0, "Intel does not publish Tj_max; 85°C used as conservative proxy")
-GAUDI3_LIQUID = ChipSpec("Gaudi 3 OAM (liquid)", 1200, 85.0, "Intel does not publish Tj_max; 85°C used as conservative proxy")
+H100_SXM = ChipSpec(
+    "H100 SXM",
+    700,
+    83.0,
+    "conservative design value; not vendor-published for SXM; the H100 PCIe product brief gives 87°C",
+    "NVIDIA H100 product page",
+)
+B200_NVL72 = ChipSpec(
+    "Blackwell GPU (GB200 NVL72)",
+    1200,
+    75.0,
+    "design target; source could not be traced; not a vendor limit",
+    "NVIDIA Blackwell datasheet, configurable up to 1,200 W per GPU in GB200 NVL72",
+)
+MI300X = ChipSpec(
+    "MI300X",
+    750,
+    85.0,
+    "AMD does not publish Tj_max; 85°C used as conservative proxy",
+    "Tom's Hardware report; AMD data sheet not opened",
+)
+GAUDI3_AIR = ChipSpec(
+    "Gaudi 3 OAM (air)",
+    900,
+    85.0,
+    "Intel does not publish Tj_max; 85°C used as conservative proxy",
+    "Intel Gaudi 3 technical paper (2025)",
+)
+GAUDI3_LIQUID = ChipSpec(
+    "Gaudi 3 OAM (liquid)",
+    1200,
+    85.0,
+    "Intel does not publish Tj_max; 85°C used as conservative proxy",
+    "Intel Hot Chips 2024 slides; conflicts with Intel's 2025 technical paper, which states 900 W liquid-cooled",
+)
 
 ALL_CHIPS = [H100_SXM, B200_NVL72, MI300X, GAUDI3_AIR, GAUDI3_LIQUID]
 
@@ -105,7 +144,7 @@ def benchmark_h100_flow_sweep() -> dict[str, object]:
 
 
 def benchmark_b200_coolant_comparison() -> dict[str, object]:
-    """Compare water vs 50% glycol for a B200 at NVL72 power level.
+    """Compare water vs 50% glycol for a Blackwell GPU at GB200 NVL72 power level.
 
     Decision: How much thermal margin do you lose with glycol freeze protection?
     Is it worth the pumping power increase?
@@ -122,6 +161,7 @@ def benchmark_b200_coolant_comparison() -> dict[str, object]:
     print("=" * 72)
     print(f"Benchmark 2: {chip.name} — Coolant Comparison")
     print(f"  TDP: {chip.tdp_w} W | Flow: {flow_lpm} LPM | Inlet: {inlet_c}°C")
+    print(f"  TDP source: {chip.tdp_source}")
     print("-" * 72)
     print(f"  {'Coolant':>16}  {'Tj (°C)':>10}  {'ΔP (kPa)':>10}  {'Pump (W)':>10}  {'Regime':>12}")
     print("-" * 72)
@@ -248,6 +288,7 @@ def benchmark_gaudi3_flow_optimization() -> dict[str, object]:
     print("=" * 72)
     print("Benchmark 4: Gaudi 3 OAM — Flow Rate Optimization")
     print(f"  Coolant: water | Target: Tj < {tj_limit}°C")
+    print(f"  Liquid TDP source: {GAUDI3_LIQUID.tdp_source}")
     print()
 
     # --- Part A: 30°C inlet (typical warm-climate CDU setpoint) ---
@@ -354,7 +395,7 @@ def print_summary() -> None:
     print("Summary: All Chips at Minimum Flow Rate for Tj < Tj_limit")
     print(f"  Coolant: water | Inlet: {inlet_c}°C | Default cold plate geometry")
     print("-" * 72)
-    print(f"  {'Chip':<22}  {'TDP (W)':>8}  {'Tj Lim':>7}  {'Min Flow':>9}  {'Tj (°C)':>8}  {'ΔP (kPa)':>9}")
+    print(f"  {'Chip':<27}  {'TDP (W)':>8}  {'Tj Lim':>7}  {'Min Flow':>9}  {'Tj (°C)':>8}  {'ΔP (kPa)':>9}")
     print("-" * 72)
 
     for chip in ALL_CHIPS:
@@ -370,12 +411,12 @@ def print_summary() -> None:
 
         if result is not None:
             print(
-                f"  {chip.name:<22}  {chip.tdp_w:>8.0f}  {chip.tj_limit_c:>6.0f}°  "
+                f"  {chip.name:<27}  {chip.tdp_w:>8.0f}  {chip.tj_limit_c:>6.0f}°  "
                 f"{min_flow:>8.1f}  {result.junction_temp_c:>8.1f}  "
                 f"{result.pressure_drop_pa / 1000:>9.1f}"
             )
         else:
-            print(f"  {chip.name:<22}  {chip.tdp_w:>8.0f}  {chip.tj_limit_c:>6.0f}°  {'no pass':>9}  {'N/A':>8}  {'N/A':>9}")
+            print(f"  {chip.name:<27}  {chip.tdp_w:>8.0f}  {chip.tj_limit_c:>6.0f}°  {'no pass':>9}  {'N/A':>8}  {'N/A':>9}")
 
     print("-" * 72)
     print(f"  'no pass' = no point from 1 to {flow_max:.0f} LPM met the model criterion.")

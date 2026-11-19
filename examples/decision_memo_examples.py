@@ -66,7 +66,7 @@ def scenario_h100_series_vs_parallel() -> None:
 
 # ---------------------------------------------------------------------------
 # Scenario 2: B200-proxy — high-power 8-GPU rack
-# B200 TDP: 1200 W (SemiAnalysis estimate — NOT NVIDIA-published)
+# B200 TDP: 1200 W (NVIDIA Blackwell datasheet: configurable up to 1,200 W per GPU in GB200 NVL72)
 # Tj limit: 75°C (SemiAnalysis estimate — NOT NVIDIA-published)
 # All thermal resistances are engineering estimates.
 # Geometry: high-performance cold plate (narrower channels, larger contact area)
@@ -87,7 +87,7 @@ def scenario_b200_proxy() -> None:
     print("SCENARIO 2: B200-proxy — 1200 W, 8 GPUs, Parallel, 20°C Inlet")
     print(DIVIDER)
     print("Input provenance:")
-    print("  heat_load_w=1200  [ESTIMATED — SemiAnalysis; NOT NVIDIA-published]")
+    print("  heat_load_w=1200  [NVIDIA Blackwell datasheet: up to 1,200 W per GPU in GB200 NVL72]")
     print("  target_junction_temp_c=75  [ESTIMATED — SemiAnalysis; NOT NVIDIA-published]")
     print("  R_jc=0.02, R_tim=0.015  [engineering estimates for larger die]")
     print("  Geometry: high-performance cold plate (engineering estimate)")
